@@ -372,8 +372,38 @@ export default function Home() {
 
   // Re-execute both queries with same filters
   const handleReExecuteCompare = async () => {
-    if (!selectedConnection) {
-      alert('Please select a connection first');
+    // Get connection IDs from each editor, fallback to selectedConnection or first connection
+    let connectionId1 = activeConnectionId1;
+    let connectionId2 = activeConnectionId2;
+
+    // If no connection selected in editors, try to get from global selectedConnection
+    if (!connectionId1 || !connectionId2) {
+      if (selectedConnection) {
+        if (!connectionId1) connectionId1 = selectedConnection.id;
+        if (!connectionId2) connectionId2 = selectedConnection.id;
+      } else {
+        // Try to get first available connection
+        try {
+          const response = await fetch('/api/connections');
+          const data = await response.json();
+          const connections = data.connections || [];
+          if (connections.length > 0) {
+            const firstConnectionId = connections[0].id;
+            if (!connectionId1) connectionId1 = firstConnectionId;
+            if (!connectionId2) connectionId2 = firstConnectionId;
+          } else {
+            alert('Please select a connection in the editors or add a connection first');
+            return;
+          }
+        } catch (error) {
+          alert('Failed to load connections');
+          return;
+        }
+      }
+    }
+
+    if (!connectionId1 || !connectionId2) {
+      alert('Please select a connection in both editors');
       return;
     }
 
@@ -422,14 +452,17 @@ export default function Home() {
     const savedCompareMode = compareMode;
 
     try {
-      // Execute both queries in parallel
-      const promises = [query1, query2].map(async (query) => {
+      // Execute both queries in parallel with their respective connections
+      const promises = [
+        { query: query1, connectionId: connectionId1 },
+        { query: query2, connectionId: connectionId2 }
+      ].map(async ({ query, connectionId }) => {
         const processedQuery = processQuery(query);
         const response = await fetch('/api/query/execute', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            connectionId: selectedConnection.id,
+            connectionId,
             query: processedQuery,
           }),
         });
