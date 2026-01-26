@@ -34,18 +34,29 @@ interface QueryResultWithMeta extends QueryResult {
 
 const STORAGE_KEYS = {
   SIDEBAR_OPEN: 'browser-sql-ide-sidebar-open',
+  QUERY_RESULTS_HEIGHT: 'browser-sql-ide-query-results-height',
 };
 
 export default function Home() {
   const [selectedConnection, setSelectedConnection] = useState<Connection | null>(null);
   const [queryResult, setQueryResult] = useState<QueryResultWithMeta | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [queryResultsHeight, setQueryResultsHeight] = useState<number>(400); // Default height in pixels
+  const [isResizing, setIsResizing] = useState(false);
 
-  // Load sidebar state from localStorage on mount
+  // Load sidebar state and query results height from localStorage on mount
   useEffect(() => {
     const savedSidebarOpen = localStorage.getItem(STORAGE_KEYS.SIDEBAR_OPEN);
     if (savedSidebarOpen !== null) {
       setSidebarOpen(savedSidebarOpen === 'true');
+    }
+    
+    const savedHeight = localStorage.getItem(STORAGE_KEYS.QUERY_RESULTS_HEIGHT);
+    if (savedHeight !== null) {
+      const height = parseInt(savedHeight, 10);
+      if (!isNaN(height) && height > 0) {
+        setQueryResultsHeight(height);
+      }
     }
   }, []);
 
@@ -53,6 +64,50 @@ export default function Home() {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.SIDEBAR_OPEN, String(sidebarOpen));
   }, [sidebarOpen]);
+
+  // Save query results height to localStorage when it changes
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.QUERY_RESULTS_HEIGHT, String(queryResultsHeight));
+  }, [queryResultsHeight]);
+
+  // Handle resizing
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing) return;
+      
+      const mainElement = document.querySelector('main');
+      if (!mainElement) return;
+      
+      const mainRect = mainElement.getBoundingClientRect();
+      const newHeight = mainRect.bottom - e.clientY;
+      
+      // Set min and max heights
+      const minHeight = 200;
+      const maxHeight = window.innerHeight - 200;
+      
+      if (newHeight >= minHeight && newHeight <= maxHeight) {
+        setQueryResultsHeight(newHeight);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = 'row-resize';
+      document.body.style.userSelect = 'none';
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isResizing]);
 
   const handleConnectionSelect = (connection: Connection) => {
     setSelectedConnection(connection);
@@ -187,7 +242,15 @@ export default function Home() {
             </button>
           )}
           {/* Query Editor with Tabs */}
-          <div className="flex-1 flex flex-col border-b border-slate-200 dark:border-slate-800">
+          <div 
+            className="flex flex-col border-b border-slate-200 dark:border-slate-800"
+            style={{ 
+              height: queryResult 
+                ? `calc(100% - ${queryResultsHeight}px - 4px)` 
+                : '100%',
+              minHeight: queryResult ? '200px' : '0'
+            }}
+          >
             <TabbedQueryEditor
               connectionId={selectedConnection?.id}
               onQuerySave={handleQuerySave}
@@ -196,9 +259,30 @@ export default function Home() {
             />
           </div>
 
+          {/* Resizer */}
+          {queryResult && (
+            <div
+              onMouseDown={(e) => {
+                e.preventDefault();
+                setIsResizing(true);
+              }}
+              className="h-1 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 cursor-row-resize transition-colors relative group"
+              style={{ flexShrink: 0 }}
+            >
+              <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-1 bg-transparent group-hover:bg-blue-500 dark:group-hover:bg-blue-400 transition-colors" />
+            </div>
+          )}
+
           {/* Query Results */}
           {queryResult && (
-            <div className="flex-1 overflow-auto">
+            <div 
+              className="overflow-hidden"
+              style={{ 
+                height: `${queryResultsHeight}px`,
+                minHeight: '200px',
+                flexShrink: 0
+              }}
+            >
               <DataVisualization 
                 result={queryResult} 
                 connectionId={selectedConnection?.id}
