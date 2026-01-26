@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import ConnectionManager from '@/components/ConnectionManager';
-import QueryEditor from '@/components/QueryEditor';
+import TabbedQueryEditor from '@/components/TabbedQueryEditor';
 import DataVisualization from '@/components/DataVisualization';
 import SavedQueries from '@/components/SavedQueries';
 
@@ -27,25 +27,18 @@ interface QueryResult {
 
 const STORAGE_KEYS = {
   SIDEBAR_OPEN: 'browser-sql-ide-sidebar-open',
-  QUERY: 'browser-sql-ide-query',
 };
 
 export default function Home() {
   const [selectedConnection, setSelectedConnection] = useState<Connection | null>(null);
   const [queryResult, setQueryResult] = useState<QueryResult | null>(null);
-  const [currentQuery, setCurrentQuery] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Load sidebar state and query from localStorage on mount
+  // Load sidebar state from localStorage on mount
   useEffect(() => {
     const savedSidebarOpen = localStorage.getItem(STORAGE_KEYS.SIDEBAR_OPEN);
     if (savedSidebarOpen !== null) {
       setSidebarOpen(savedSidebarOpen === 'true');
-    }
-    
-    const savedQuery = localStorage.getItem(STORAGE_KEYS.QUERY);
-    if (savedQuery !== null) {
-      setCurrentQuery(savedQuery);
     }
   }, []);
 
@@ -95,8 +88,10 @@ export default function Home() {
   };
 
   const handleQuerySelect = (query: string) => {
-    setCurrentQuery(query);
-    localStorage.setItem(STORAGE_KEYS.QUERY, query);
+    // Add query to a new tab using the global function exposed by TabbedQueryEditor
+    if (typeof window !== 'undefined' && (window as any).addQueryToTab) {
+      (window as any).addQueryToTab(query);
+    }
   };
 
   const handleQueryExecute = async (query: string) => {
@@ -105,8 +100,10 @@ export default function Home() {
       return;
     }
 
-    setCurrentQuery(query);
-    localStorage.setItem(STORAGE_KEYS.QUERY, query);
+    // Add query to a new tab and execute it
+    if (typeof window !== 'undefined' && (window as any).addQueryToTab) {
+      (window as any).addQueryToTab(query);
+    }
     
     try {
       const response = await fetch('/api/query/execute', {
@@ -179,13 +176,13 @@ export default function Home() {
               <PanelLeftOpen className="w-4 h-4" />
             </button>
           )}
-          {/* Query Editor */}
+          {/* Query Editor with Tabs */}
           <div className="flex-1 flex flex-col border-b border-slate-200 dark:border-slate-800">
-            <QueryEditor
+            <TabbedQueryEditor
               connectionId={selectedConnection?.id}
-              initialQuery={currentQuery}
               onQuerySave={handleQuerySave}
               onQueryResult={handleQueryResult}
+              onQuerySelect={handleQuerySelect}
             />
           </div>
 

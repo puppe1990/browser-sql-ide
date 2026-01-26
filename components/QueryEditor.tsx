@@ -9,6 +9,7 @@ interface QueryEditorProps {
   initialQuery?: string;
   onQuerySave?: (query: string) => void;
   onQueryResult?: (result: any) => void;
+  onQueryChange?: (query: string) => void;
 }
 
 const STORAGE_KEY = 'browser-sql-ide-query';
@@ -18,9 +19,15 @@ export default function QueryEditor({
   initialQuery = '',
   onQuerySave,
   onQueryResult,
+  onQueryChange,
 }: QueryEditorProps) {
-  // Load query from localStorage on mount if initialQuery is empty
+  // Load query from localStorage on mount if initialQuery is empty (fallback for non-tabbed usage)
   const [query, setQuery] = useState(() => {
+    // If onQueryChange is provided, we're in tabbed mode - always use initialQuery
+    if (onQueryChange !== undefined) {
+      return initialQuery || '';
+    }
+    // Otherwise, fallback to localStorage for standalone usage
     if (initialQuery) {
       return initialQuery;
     }
@@ -38,21 +45,30 @@ export default function QueryEditor({
   const connectionIdRef = useRef(connectionId);
   const handleExecuteRef = useRef<((queryToExecute?: string) => Promise<void>) | null>(null);
 
-  // Update query when initialQuery prop changes
+  // Update query when initialQuery prop changes (always update, even if empty string)
+  // Also reset result and error when switching tabs
   useEffect(() => {
-    if (initialQuery) {
+    // If onQueryChange is provided, we're in tabbed mode - always sync with initialQuery
+    if (onQueryChange !== undefined) {
+      setQuery(initialQuery || '');
+      setResult(null);
+      setError(null);
+    } else if (initialQuery !== undefined) {
+      // Standalone mode - only update if initialQuery is provided
       setQuery(initialQuery);
     }
-  }, [initialQuery]);
+  }, [initialQuery, onQueryChange]);
 
-  // Save query to localStorage when it changes (debounced)
+  // Save query to localStorage when it changes (debounced) - only if onQueryChange is not provided (fallback for non-tabbed usage)
   useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      localStorage.setItem(STORAGE_KEY, query);
-    }, 500); // Debounce by 500ms to avoid too frequent writes
+    if (!onQueryChange) {
+      const timeoutId = setTimeout(() => {
+        localStorage.setItem(STORAGE_KEY, query);
+      }, 500); // Debounce by 500ms to avoid too frequent writes
 
-    return () => clearTimeout(timeoutId);
-  }, [query]);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [query, onQueryChange]);
 
   // Keep refs in sync
   useEffect(() => {
@@ -207,7 +223,13 @@ export default function QueryEditor({
           height="100%"
           defaultLanguage="sql"
           value={query}
-          onChange={(value) => setQuery(value || '')}
+          onChange={(value) => {
+            const newQuery = value || '';
+            setQuery(newQuery);
+            if (onQueryChange) {
+              onQueryChange(newQuery);
+            }
+          }}
           onMount={handleEditorDidMount}
           theme="vs-dark"
           options={{
