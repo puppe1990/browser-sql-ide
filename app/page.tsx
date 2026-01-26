@@ -23,7 +23,13 @@ interface QueryResult {
   columns: string[];
   rows: any[];
   rowCount: number;
+  totalCount?: number;
   executionTime: number;
+  hasMore?: boolean;
+}
+
+interface QueryResultWithMeta extends QueryResult {
+  query?: string; // Original query for pagination
 }
 
 const STORAGE_KEYS = {
@@ -32,7 +38,7 @@ const STORAGE_KEYS = {
 
 export default function Home() {
   const [selectedConnection, setSelectedConnection] = useState<Connection | null>(null);
-  const [queryResult, setQueryResult] = useState<QueryResult | null>(null);
+  const [queryResult, setQueryResult] = useState<QueryResultWithMeta | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Load sidebar state from localStorage on mount
@@ -52,8 +58,8 @@ export default function Home() {
     setSelectedConnection(connection);
   };
 
-  const handleQueryResult = (result: QueryResult) => {
-    setQueryResult(result);
+  const handleQueryResult = (result: QueryResult, query?: string) => {
+    setQueryResult({ ...result, query });
   };
 
   const handleQuerySave = async (query: string) => {
@@ -122,7 +128,7 @@ export default function Home() {
       const data = await response.json();
 
       if (data.success) {
-        setQueryResult(data.result);
+        setQueryResult({ ...data.result, query: processedQuery });
       } else {
         alert(data.error || 'Query execution failed');
       }
@@ -193,7 +199,11 @@ export default function Home() {
           {/* Query Results */}
           {queryResult && (
             <div className="flex-1 overflow-auto">
-              <DataVisualization result={queryResult} />
+              <DataVisualization 
+                result={queryResult} 
+                connectionId={selectedConnection?.id}
+                query={queryResult.query}
+              />
             </div>
           )}
 

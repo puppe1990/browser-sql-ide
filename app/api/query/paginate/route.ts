@@ -6,11 +6,18 @@ import { dbConnector } from '@/lib/database-connectors';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { connectionId, query } = body;
+    const { connectionId, query, offset, limit = 100 } = body;
 
     if (!connectionId || !query) {
       return NextResponse.json(
         { error: 'Connection ID and query are required' },
+        { status: 400 }
+      );
+    }
+
+    if (offset === undefined || offset === null) {
+      return NextResponse.json(
+        { error: 'Offset is required' },
         { status: 400 }
       );
     }
@@ -38,30 +45,15 @@ export async function POST(request: NextRequest) {
       ssl: connectionData.ssl === 1,
     };
 
-    const startTime = Date.now();
-
     try {
-      // Execute query with pagination (first 100 rows)
-      const result = await dbConnector.executeQuery(connection, query, 0, 100);
-      const executionTime = Date.now() - startTime;
-
-      // Save to history
-      db.prepare(
-        'INSERT INTO query_history (connection_id, query, execution_time, success) VALUES (?, ?, ?, ?)'
-      ).run(connectionId, query, executionTime, 1);
+      // Execute query with pagination
+      const result = await dbConnector.executeQuery(connection, query, offset, limit);
 
       return NextResponse.json({
         success: true,
         result,
       });
     } catch (error: any) {
-      const executionTime = Date.now() - startTime;
-
-      // Save failed query to history
-      db.prepare(
-        'INSERT INTO query_history (connection_id, query, execution_time, success, error_message) VALUES (?, ?, ?, ?, ?)'
-      ).run(connectionId, query, executionTime, 0, error.message);
-
       return NextResponse.json(
         {
           success: false,

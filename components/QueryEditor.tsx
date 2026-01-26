@@ -301,7 +301,8 @@ export default function QueryEditor({
       if (data.success) {
         setResult(data.result);
         if (onQueryResult) {
-          onQueryResult(data.result);
+          // Pass the original query (before processing) along with the result for pagination
+          onQueryResult(data.result, queryValue);
         }
       } else {
         const errorMessage = data.error || 'Query execution failed';

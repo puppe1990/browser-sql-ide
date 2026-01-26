@@ -39,3 +39,36 @@ export function processQuery(query: string): string {
   // Join lines and trim only leading/trailing whitespace from the entire query
   return processedLines.join('\n').trim();
 }
+
+/**
+ * Add LIMIT 100 to SELECT queries that don't already have a LIMIT clause
+ */
+export function addDefaultLimit(query: string): string {
+  if (!query) return query;
+  
+  const trimmedQuery = query.trim();
+  if (!trimmedQuery) return query;
+  
+  // Check if it's a SELECT query (case-insensitive)
+  const upperQuery = trimmedQuery.toUpperCase();
+  if (!upperQuery.startsWith('SELECT')) {
+    return query; // Not a SELECT query, return as-is
+  }
+  
+  // Check if query already has a LIMIT clause (case-insensitive)
+  // Use regex to find LIMIT keyword, accounting for word boundaries
+  const limitRegex = /\bLIMIT\s+\d+/i;
+  if (limitRegex.test(trimmedQuery)) {
+    return query; // Already has LIMIT, return as-is
+  }
+  
+  // Remove trailing semicolon if present, add LIMIT 100, then add semicolon back if it was there
+  const hasSemicolon = trimmedQuery.endsWith(';');
+  const queryWithoutSemicolon = hasSemicolon 
+    ? trimmedQuery.slice(0, -1).trim() 
+    : trimmedQuery;
+  
+  const queryWithLimit = `${queryWithoutSemicolon} LIMIT 100`;
+  
+  return hasSemicolon ? `${queryWithLimit};` : queryWithLimit;
+}
