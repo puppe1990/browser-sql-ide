@@ -30,6 +30,8 @@ export default function ConnectionManager({
   const [showImportModal, setShowImportModal] = useState(false);
   const [editingConnection, setEditingConnection] = useState<Connection | null>(null);
   const [testing, setTesting] = useState<number | null>(null);
+  const [testingForm, setTestingForm] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [importJson, setImportJson] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
@@ -113,14 +115,47 @@ export default function ConnectionManager({
 
       const data = await response.json();
       if (data.success) {
-        alert('Connection test successful!');
+        alert('✅ Connection test successful!');
       } else {
-        alert(`Connection test failed: ${data.error}`);
+        alert(`❌ Connection test failed: ${data.error || 'Unknown error'}`);
       }
-    } catch (error) {
-      alert('Connection test failed');
+    } catch (error: any) {
+      alert(`❌ Connection test failed: ${error.message || 'Unknown error'}`);
     } finally {
       setTesting(null);
+    }
+  };
+
+  const handleTestForm = async () => {
+    // Validate required fields
+    if (!formData.host || !formData.port || !formData.database || !formData.username || !formData.password) {
+      setTestResult({ 
+        success: false, 
+        message: 'Please fill in all required fields (host, port, database, username, password)' 
+      });
+      return;
+    }
+
+    setTestingForm(true);
+    setTestResult(null);
+
+    try {
+      const response = await fetch('/api/connections/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setTestResult({ success: true, message: data.message || 'Connection test successful!' });
+      } else {
+        setTestResult({ success: false, message: data.error || 'Connection test failed' });
+      }
+    } catch (error: any) {
+      setTestResult({ success: false, message: error.message || 'Connection test failed' });
+    } finally {
+      setTestingForm(false);
     }
   };
 
@@ -151,6 +186,7 @@ export default function ConnectionManager({
       ssl: false,
     });
     setEditingConnection(null);
+    setTestResult(null);
   };
 
   const handleExport = () => {
@@ -334,7 +370,7 @@ export default function ConnectionManager({
                       handleTest(connection);
                     }}
                     disabled={testing === connection.id}
-                    className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
+                    className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors disabled:opacity-50"
                     title="Test Connection"
                   >
                     <TestTube
@@ -512,12 +548,55 @@ export default function ConnectionManager({
                 </label>
               </div>
 
+              {/* Test Connection Button and Result */}
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={handleTestForm}
+                  disabled={testingForm || !formData.host || !formData.port || !formData.database || !formData.username || !formData.password}
+                  className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {testingForm ? (
+                    <>
+                      <TestTube className="w-4 h-4 animate-spin" />
+                      Testing Connection...
+                    </>
+                  ) : (
+                    <>
+                      <TestTube className="w-4 h-4" />
+                      Test Connection
+                    </>
+                  )}
+                </button>
+
+                {testResult && (
+                  <div
+                    className={`p-3 rounded-lg ${
+                      testResult.success
+                        ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
+                        : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+                    }`}
+                  >
+                    <p
+                      className={`text-sm ${
+                        testResult.success
+                          ? 'text-green-800 dark:text-green-200'
+                          : 'text-red-800 dark:text-red-200'
+                      }`}
+                    >
+                      {testResult.message}
+                    </p>
+                  </div>
+                )}
+              </div>
+
               <div className="flex gap-2 justify-end">
                 <button
                   type="button"
                   onClick={() => {
                     setShowModal(false);
                     resetForm();
+                    setTestResult(null);
                   }}
                   className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                 >
