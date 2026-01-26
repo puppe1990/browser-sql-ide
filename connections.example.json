@@ -1,0 +1,32 @@
+[
+  {
+    "name": "Local PostgreSQL",
+    "type": "postgresql",
+    "host": "localhost",
+    "port": 5432,
+    "database": "mydb",
+    "username": "postgres",
+    "password": "your_password_here",
+    "ssl": false
+  },
+  {
+    "name": "Production Database",
+    "type": "postgresql",
+    "host": "db.example.com",
+    "port": 5432,
+    "database": "production",
+    "username": "admin",
+    "password": "secure_password",
+    "ssl": true
+  },
+  {
+    "name": "Development Server",
+    "type": "postgresql",
+    "host": "dev.example.com",
+    "port": 5432,
+    "database": "devdb",
+    "username": "devuser",
+    "password": "devpassword",
+    "ssl": false
+  }
+]
