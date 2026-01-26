@@ -35,6 +35,7 @@ interface QueryResultWithMeta extends QueryResult {
 const STORAGE_KEYS = {
   SIDEBAR_OPEN: 'browser-sql-ide-sidebar-open',
   QUERY_RESULTS_HEIGHT: 'browser-sql-ide-query-results-height',
+  SAVED_QUERIES_HEIGHT: 'browser-sql-ide-saved-queries-height',
 };
 
 export default function Home() {
@@ -42,20 +43,30 @@ export default function Home() {
   const [queryResult, setQueryResult] = useState<QueryResultWithMeta | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [queryResultsHeight, setQueryResultsHeight] = useState<number>(400); // Default height in pixels
+  const [savedQueriesHeight, setSavedQueriesHeight] = useState<number>(320); // Default height in pixels
   const [isResizing, setIsResizing] = useState(false);
+  const [isResizingSavedQueries, setIsResizingSavedQueries] = useState(false);
 
-  // Load sidebar state and query results height from localStorage on mount
+  // Load sidebar state and heights from localStorage on mount
   useEffect(() => {
     const savedSidebarOpen = localStorage.getItem(STORAGE_KEYS.SIDEBAR_OPEN);
     if (savedSidebarOpen !== null) {
       setSidebarOpen(savedSidebarOpen === 'true');
     }
     
-    const savedHeight = localStorage.getItem(STORAGE_KEYS.QUERY_RESULTS_HEIGHT);
-    if (savedHeight !== null) {
-      const height = parseInt(savedHeight, 10);
+    const savedQueryResultsHeight = localStorage.getItem(STORAGE_KEYS.QUERY_RESULTS_HEIGHT);
+    if (savedQueryResultsHeight !== null) {
+      const height = parseInt(savedQueryResultsHeight, 10);
       if (!isNaN(height) && height > 0) {
         setQueryResultsHeight(height);
+      }
+    }
+    
+    const savedSavedQueriesHeight = localStorage.getItem(STORAGE_KEYS.SAVED_QUERIES_HEIGHT);
+    if (savedSavedQueriesHeight !== null) {
+      const height = parseInt(savedSavedQueriesHeight, 10);
+      if (!isNaN(height) && height > 0) {
+        setSavedQueriesHeight(height);
       }
     }
   }, []);
@@ -70,7 +81,12 @@ export default function Home() {
     localStorage.setItem(STORAGE_KEYS.QUERY_RESULTS_HEIGHT, String(queryResultsHeight));
   }, [queryResultsHeight]);
 
-  // Handle resizing
+  // Save saved queries height to localStorage when it changes
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.SAVED_QUERIES_HEIGHT, String(savedQueriesHeight));
+  }, [savedQueriesHeight]);
+
+  // Handle resizing for Query Results
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isResizing) return;
@@ -108,6 +124,45 @@ export default function Home() {
       document.body.style.userSelect = '';
     };
   }, [isResizing]);
+
+  // Handle resizing for Saved Queries
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizingSavedQueries) return;
+      
+      const mainElement = document.querySelector('main');
+      if (!mainElement) return;
+      
+      const mainRect = mainElement.getBoundingClientRect();
+      const newHeight = mainRect.bottom - e.clientY;
+      
+      // Set min and max heights
+      const minHeight = 150;
+      const maxHeight = window.innerHeight - 200;
+      
+      if (newHeight >= minHeight && newHeight <= maxHeight) {
+        setSavedQueriesHeight(newHeight);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingSavedQueries(false);
+    };
+
+    if (isResizingSavedQueries) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = 'row-resize';
+      document.body.style.userSelect = 'none';
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isResizingSavedQueries]);
 
   const handleConnectionSelect = (connection: Connection) => {
     setSelectedConnection(connection);
@@ -247,8 +302,10 @@ export default function Home() {
             style={{ 
               height: queryResult 
                 ? `calc(100% - ${queryResultsHeight}px - 4px)` 
-                : '100%',
-              minHeight: queryResult ? '200px' : '0'
+                : !queryResult 
+                  ? `calc(100% - ${savedQueriesHeight}px - 4px)`
+                  : '100%',
+              minHeight: (queryResult || !queryResult) ? '200px' : '0'
             }}
           >
             <TabbedQueryEditor
@@ -259,7 +316,7 @@ export default function Home() {
             />
           </div>
 
-          {/* Resizer */}
+          {/* Resizer for Query Results */}
           {queryResult && (
             <div
               onMouseDown={(e) => {
@@ -291,9 +348,30 @@ export default function Home() {
             </div>
           )}
 
+          {/* Resizer for Saved Queries */}
+          {!queryResult && (
+            <div
+              onMouseDown={(e) => {
+                e.preventDefault();
+                setIsResizingSavedQueries(true);
+              }}
+              className="h-1 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 cursor-row-resize transition-colors relative group border-t border-slate-200 dark:border-slate-800"
+              style={{ flexShrink: 0 }}
+            >
+              <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-1 bg-transparent group-hover:bg-blue-500 dark:group-hover:bg-blue-400 transition-colors" />
+            </div>
+          )}
+
           {/* Saved Queries Panel */}
           {!queryResult && (
-            <div className="h-80 border-t border-slate-200 dark:border-slate-800">
+            <div 
+              className="overflow-hidden border-t border-slate-200 dark:border-slate-800"
+              style={{ 
+                height: `${savedQueriesHeight}px`,
+                minHeight: '150px',
+                flexShrink: 0
+              }}
+            >
               <SavedQueries
                 connectionId={selectedConnection?.id}
                 onQuerySelect={handleQuerySelect}
