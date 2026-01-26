@@ -5,12 +5,24 @@ import Editor from '@monaco-editor/react';
 import { Play, Save, Loader2 } from 'lucide-react';
 import { processQuery } from '@/lib/query-utils';
 
+interface Connection {
+  id: number;
+  name: string;
+  type: string;
+  host: string;
+  port: number;
+  database: string;
+  username: string;
+  ssl: boolean;
+}
+
 interface QueryEditorProps {
   connectionId?: number;
   initialQuery?: string;
   onQuerySave?: (query: string) => void;
-  onQueryResult?: (result: any) => void;
+  onQueryResult?: (result: any, query?: string) => void;
   onQueryChange?: (query: string) => void;
+  onConnectionChange?: (connectionId: number) => void;
 }
 
 const STORAGE_KEY = 'browser-sql-ide-query';
@@ -21,7 +33,52 @@ export default function QueryEditor({
   onQuerySave,
   onQueryResult,
   onQueryChange,
+  onConnectionChange,
 }: QueryEditorProps) {
+  const [connections, setConnections] = useState<Connection[]>([]);
+  const [selectedConnectionId, setSelectedConnectionId] = useState<number | undefined>(connectionId);
+
+  // Load connections and auto-select first one
+  useEffect(() => {
+    const loadConnections = async () => {
+      try {
+        const response = await fetch('/api/connections');
+        const data = await response.json();
+        const loadedConnections = data.connections || [];
+        setConnections(loadedConnections);
+        
+        // Auto-select first connection if no connection is selected
+        if (loadedConnections.length > 0 && !selectedConnectionId) {
+          const firstConnectionId = loadedConnections[0].id;
+          setSelectedConnectionId(firstConnectionId);
+          if (onConnectionChange) {
+            onConnectionChange(firstConnectionId);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load connections:', error);
+      }
+    };
+    
+    loadConnections();
+  }, []);
+
+  // Update selected connection when connectionId prop changes
+  useEffect(() => {
+    if (connectionId !== undefined) {
+      setSelectedConnectionId(connectionId);
+    }
+  }, [connectionId]);
+
+  // Handle connection selection change
+  const handleConnectionChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newConnectionId = parseInt(e.target.value, 10);
+    setSelectedConnectionId(newConnectionId);
+    if (onConnectionChange) {
+      onConnectionChange(newConnectionId);
+    }
+  };
+
   // Load query from localStorage on mount if initialQuery is empty (fallback for non-tabbed usage)
   const [query, setQuery] = useState(() => {
     // If onQueryChange is provided, we're in tabbed mode - always use initialQuery
@@ -197,8 +254,8 @@ export default function QueryEditor({
   }, [isExecuting]);
 
   useEffect(() => {
-    connectionIdRef.current = connectionId;
-  }, [connectionId]);
+    connectionIdRef.current = selectedConnectionId || connectionId;
+  }, [selectedConnectionId, connectionId]);
 
   // Add global keyboard shortcut listener as fallback
   useEffect(() => {
@@ -217,7 +274,8 @@ export default function QueryEditor({
           e.stopPropagation();
           
           const currentQuery = editor.getValue();
-          if (connectionIdRef.current && currentQuery.trim() && !isExecutingRef.current && handleExecuteRef.current) {
+          const currentConnectionId = selectedConnectionId || connectionIdRef.current;
+          if (currentConnectionId && currentQuery.trim() && !isExecutingRef.current && handleExecuteRef.current) {
             // Process query to ensure complete lines with semicolons are considered
             const processedQuery = processQuery(currentQuery);
             handleExecuteRef.current(processedQuery);
@@ -247,7 +305,8 @@ export default function QueryEditor({
     // KeyMod.CtrlCmd automatically handles Ctrl on Windows/Linux and Cmd on Mac
     const executeCommand = () => {
       const currentQuery = editor.getValue();
-      if (connectionIdRef.current && currentQuery.trim() && !isExecutingRef.current && handleExecuteRef.current) {
+      const currentConnectionId = selectedConnectionId || connectionIdRef.current;
+      if (currentConnectionId && currentQuery.trim() && !isExecutingRef.current && handleExecuteRef.current) {
         // Process query to ensure complete lines with semicolons are considered
         const processedQuery = processQuery(currentQuery);
         handleExecuteRef.current(processedQuery);
@@ -262,7 +321,8 @@ export default function QueryEditor({
   const handleExecute = async (queryToExecute?: string) => {
     const queryValue = queryToExecute || query;
     
-    if (!connectionId) {
+    const connectionToUse = selectedConnectionId || connectionId;
+    if (!connectionToUse) {
       alert('Please select a connection first');
       return;
     }
@@ -291,7 +351,7 @@ export default function QueryEditor({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          connectionId,
+          connectionId: connectionToUse,
           query: processedQuery,
         }),
       });
@@ -302,7 +362,7 @@ export default function QueryEditor({
         setResult(data.result);
         if (onQueryResult) {
           // Pass the original query (before processing) along with the result for pagination
-          onQueryResult(data.result, queryValue);
+          onQueryResult(data.result, queryValue || undefined);
         }
       } else {
         const errorMessage = data.error || 'Query execution failed';
@@ -340,9 +400,24 @@ export default function QueryEditor({
   return (
     <div className="flex flex-col h-full bg-white dark:bg-slate-900 overflow-hidden">
       <div className="flex justify-between items-center px-4 py-2.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900">
-        <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
-          Query Editor
-        </h3>
+        <div className="flex items-center gap-3">
+          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
+            Query Editor
+          </h3>
+          {connections.length > 0 && (
+            <select
+              value={selectedConnectionId || ''}
+              onChange={handleConnectionChange}
+              className="text-xs px-2 py-1 border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+            >
+              {connections.map((conn) => (
+                <option key={conn.id} value={conn.id}>
+                  {conn.name} ({conn.type})
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
         <div className="flex gap-2">
           <button
             onClick={handleSave}
@@ -354,7 +429,7 @@ export default function QueryEditor({
           </button>
           <button
             onClick={() => handleExecute()}
-            disabled={isExecuting || !connectionId}
+            disabled={isExecuting || !(selectedConnectionId || connectionId)}
             className="px-3 py-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
           >
             {isExecuting ? (

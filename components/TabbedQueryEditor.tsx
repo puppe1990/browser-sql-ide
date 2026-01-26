@@ -15,7 +15,7 @@ interface Tab {
 interface TabbedQueryEditorProps {
   connectionId?: number;
   onQuerySave?: (query: string) => void;
-  onQueryResult?: (result: any) => void;
+  onQueryResult?: (result: any, query?: string) => void;
   onQuerySelect?: (query: string) => void;
 }
 
