@@ -41,6 +41,94 @@ export function processQuery(query: string): string {
 }
 
 /**
+ * Find the complete SQL statement at the cursor position (DBeaver-style)
+ * Delimiters: semicolon (;) or blank lines (Smart mode)
+ * Returns the statement that contains the cursor line
+ */
+export function findStatementAtCursor(
+  fullText: string,
+  cursorLineNumber: number, // 1-based line number
+  useBlankLinesAsDelimiter: boolean = true // Smart mode: blank lines are delimiters
+): string {
+  if (!fullText) return '';
+  
+  const lines = fullText.split('\n');
+  const cursorIndex = cursorLineNumber - 1; // Convert to 0-based
+  
+  if (cursorIndex < 0 || cursorIndex >= lines.length) {
+    return fullText; // Invalid position, return all
+  }
+  
+  // Find the start of the statement (search backwards from cursor)
+  // Look for the last delimiter (; or blank line) BEFORE the cursor
+  let startLine = 0;
+  let foundDelimiterBefore = false;
+  
+  for (let i = cursorIndex - 1; i >= 0; i--) {
+    const line = lines[i];
+    const trimmedLine = line.trim();
+    
+    // Check if this line ends a statement (has semicolon)
+    if (trimmedLine.endsWith(';')) {
+      startLine = i + 1;
+      foundDelimiterBefore = true;
+      break;
+    }
+    
+    // Check if blank line is a delimiter (Smart mode)
+    if (useBlankLinesAsDelimiter && trimmedLine === '') {
+      startLine = i + 1;
+      foundDelimiterBefore = true;
+      break;
+    }
+  }
+  
+  // If no delimiter found before cursor, start from beginning
+  if (!foundDelimiterBefore) {
+    startLine = 0;
+  }
+  
+  // Find the first non-empty line from startLine (skip leading empty lines)
+  for (let i = startLine; i <= cursorIndex; i++) {
+    if (lines[i].trim() !== '') {
+      startLine = i;
+      break;
+    }
+  }
+  
+  // Find the end of the statement (search forwards from cursor)
+  let endLine = lines.length - 1;
+  
+  for (let i = cursorIndex; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmedLine = line.trim();
+    
+    // Check if this line ends a statement (has semicolon)
+    if (trimmedLine.endsWith(';')) {
+      endLine = i;
+      break;
+    }
+    
+    // Check if blank line is a delimiter (Smart mode)
+    // Only consider blank lines AFTER the cursor line
+    if (useBlankLinesAsDelimiter && trimmedLine === '' && i > cursorIndex) {
+      endLine = i - 1;
+      break;
+    }
+  }
+  
+  // Extract the statement
+  const statementLines = lines.slice(startLine, endLine + 1);
+  let statement = statementLines.join('\n');
+  
+  // Trim only leading/trailing whitespace, preserve internal formatting
+  statement = statement.trim();
+  
+  // If statement is empty, return the entire text as fallback
+  return statement || fullText;
+}
+
+/**
  * Add LIMIT 100 to SELECT queries that don't already have a LIMIT clause
  */
 export function addDefaultLimit(query: string): string {

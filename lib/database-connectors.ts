@@ -183,9 +183,16 @@ class DatabaseConnector {
 
       const executionTime = Date.now() - startTime;
 
+      // Handle case where result.fields might be undefined (e.g., multiple queries or non-SELECT queries)
+      const columns = result.fields && result.fields.length > 0
+        ? result.fields.map((field) => field.name)
+        : result.rows && result.rows.length > 0
+        ? Object.keys(result.rows[0])
+        : [];
+
       return {
-        columns: result.fields.map((field) => field.name),
-        rows: result.rows,
+        columns,
+        rows: result.rows || [],
         rowCount: result.rowCount || 0,
         totalCount,
         executionTime,

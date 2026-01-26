@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
 import { Play, Save, Loader2 } from 'lucide-react';
-import { processQuery } from '@/lib/query-utils';
+import { processQuery, findStatementAtCursor } from '@/lib/query-utils';
 
 interface Connection {
   id: number;
@@ -289,8 +289,25 @@ export default function QueryEditor({
               queryToExecute = editor.getValue();
             }
           } else {
-            // No selection, use entire query
-            queryToExecute = editor.getValue();
+            // No selection - find the complete statement at cursor position (DBeaver-style)
+            const model = editor.getModel();
+            if (model) {
+              const position = editor.getPosition();
+              if (position) {
+                const fullText = editor.getValue();
+                const lineNumber = position.lineNumber; // 1-based
+                
+                // Find the complete statement that contains the cursor line
+                // Delimiters: semicolon (;) or blank lines (Smart mode)
+                queryToExecute = findStatementAtCursor(fullText, lineNumber, true);
+              } else {
+                // No position, execute entire query
+                queryToExecute = editor.getValue();
+              }
+            } else {
+              // No model, execute entire query
+              queryToExecute = editor.getValue();
+            }
           }
           
           const currentConnectionId = selectedConnectionId || connectionIdRef.current;
@@ -335,8 +352,25 @@ export default function QueryEditor({
           queryToExecute = editor.getValue();
         }
       } else {
-        // No selection, use entire query
-        queryToExecute = editor.getValue();
+        // No selection - find the complete statement at cursor position (DBeaver-style)
+        const model = editor.getModel();
+        if (model) {
+          const position = editor.getPosition();
+          if (position) {
+            const fullText = editor.getValue();
+            const lineNumber = position.lineNumber; // 1-based
+            
+            // Find the complete statement that contains the cursor line
+            // Delimiters: semicolon (;) or blank lines (Smart mode)
+            queryToExecute = findStatementAtCursor(fullText, lineNumber, true);
+          } else {
+            // No position, execute entire query
+            queryToExecute = editor.getValue();
+          }
+        } else {
+          // No model, execute entire query
+          queryToExecute = editor.getValue();
+        }
       }
       
       const currentConnectionId = selectedConnectionId || connectionIdRef.current;
@@ -368,13 +402,32 @@ export default function QueryEditor({
           if (model) {
             queryValue = model.getValueInRange(selection);
           } else {
-            queryValue = query;
+            // Fallback to editor value if model is not available
+            queryValue = editorRef.current.getValue() || query;
           }
         } else {
-          // No selection, use entire query
-          queryValue = query;
+          // No selection - find the complete statement at cursor position (DBeaver-style)
+          const model = editorRef.current.getModel();
+          if (model) {
+            const position = editorRef.current.getPosition();
+            if (position) {
+              const fullText = editorRef.current.getValue() || query;
+              const lineNumber = position.lineNumber; // 1-based
+              
+              // Find the complete statement that contains the cursor line
+              // Delimiters: semicolon (;) or blank lines (Smart mode)
+              queryValue = findStatementAtCursor(fullText, lineNumber, true);
+            } else {
+              // No position, execute entire query
+              queryValue = editorRef.current.getValue() || query;
+            }
+          } else {
+            // No model, execute entire query
+            queryValue = editorRef.current.getValue() || query;
+          }
         }
       } else {
+        // Fallback to state if editor ref is not available
         queryValue = query;
       }
     }
