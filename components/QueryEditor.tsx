@@ -88,29 +88,29 @@ export default function QueryEditor({
   };
 
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden">
-      <div className="flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-700">
-        <h3 className="text-lg font-semibold text-gray-800 dark:text-white">
+    <div className="flex flex-col h-full bg-white dark:bg-slate-900 overflow-hidden">
+      <div className="flex justify-between items-center px-4 py-2.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900">
+        <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
           Query Editor
         </h3>
         <div className="flex gap-2">
           <button
             onClick={handleSave}
             disabled={!query.trim()}
-            className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
           >
-            <Save className="w-4 h-4" />
+            <Save className="w-3.5 h-3.5" />
             Save
           </button>
           <button
             onClick={handleExecute}
             disabled={isExecuting || !connectionId}
-            className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-3 py-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
           >
             {isExecuting ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
             ) : (
-              <Play className="w-4 h-4" />
+              <Play className="w-3.5 h-3.5" />
             )}
             Execute
           </button>
@@ -137,21 +137,19 @@ export default function QueryEditor({
       </div>
 
       {(error || result) && (
-        <div className="border-t border-gray-200 dark:border-gray-700 p-4 max-h-64 overflow-auto">
+        <div className="border-t border-slate-200 dark:border-slate-800 p-3 bg-slate-50 dark:bg-slate-900">
           {error && (
-            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
-              <p className="text-red-800 dark:text-red-200 font-semibold">Error:</p>
-              <p className="text-red-700 dark:text-red-300 text-sm mt-1">{error}</p>
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded p-2">
+              <p className="text-red-800 dark:text-red-200 text-xs font-semibold">Error:</p>
+              <p className="text-red-700 dark:text-red-300 text-xs mt-1">{error}</p>
             </div>
           )}
           {result && (
-            <div className="space-y-2">
-              <div className="flex justify-between items-center text-sm text-gray-600 dark:text-gray-400">
-                <span>
-                  {result.rowCount} row{result.rowCount !== 1 ? 's' : ''} returned
-                </span>
-                <span>Execution time: {result.executionTime}ms</span>
-              </div>
+            <div className="flex justify-between items-center text-xs text-slate-600 dark:text-slate-400">
+              <span>
+                {result.rowCount} row{result.rowCount !== 1 ? 's' : ''} returned
+              </span>
+              <span>Execution time: {result.executionTime}ms</span>
             </div>
           )}
         </div>

@@ -300,81 +300,87 @@ export default function ConnectionManager({
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-2xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
-          <Database className="w-6 h-6" />
-          Connections
-        </h2>
-        <div className="flex gap-2">
-          <button
-            onClick={handleExport}
-            disabled={connections.length === 0}
-            className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Export connections to JSON"
-          >
-            <Download className="w-4 h-4" />
-            Export
-          </button>
-          <button
-            onClick={() => setShowImportModal(true)}
-            className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
-            title="Import connections from JSON"
-          >
-            <Upload className="w-4 h-4" />
-            Import
-          </button>
+    <div className="h-full flex flex-col">
+      <div className="p-4 border-b border-slate-200 dark:border-slate-800">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
+            Connections
+          </h2>
           <button
             onClick={() => {
               resetForm();
               setShowModal(true);
             }}
-            className="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
+            className="p-1.5 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors"
+            title="New Connection"
           >
             <Plus className="w-4 h-4" />
-            New Connection
+          </button>
+        </div>
+        <div className="flex gap-1">
+          <button
+            onClick={handleExport}
+            disabled={connections.length === 0}
+            className="flex-1 px-2 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Export connections to JSON"
+          >
+            <Download className="w-3.5 h-3.5 inline mr-1" />
+            Export
+          </button>
+          <button
+            onClick={() => setShowImportModal(true)}
+            className="flex-1 px-2 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors"
+            title="Import connections from JSON"
+          >
+            <Upload className="w-3.5 h-3.5 inline mr-1" />
+            Import
           </button>
         </div>
       </div>
 
-      <div className="space-y-2">
+      <div className="flex-1 overflow-auto p-2 space-y-1">
         {connections.length === 0 ? (
-          <p className="text-gray-500 dark:text-gray-400 text-center py-8">
-            No connections yet. Create your first connection to get started.
-          </p>
+          <div className="text-center py-12 px-4">
+            <Database className="w-8 h-8 text-slate-400 dark:text-slate-600 mx-auto mb-2" />
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              No connections yet
+            </p>
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+              Create your first connection
+            </p>
+          </div>
         ) : (
           connections.map((connection) => (
             <div
               key={connection.id}
-              className={`p-4 border rounded-lg cursor-pointer transition-all ${
+              className={`group relative p-3 rounded-lg cursor-pointer transition-all ${
                 selectedConnectionId === connection.id
-                  ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
-                  : 'border-gray-200 dark:border-gray-700 hover:border-primary-300'
+                  ? 'bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800'
+                  : 'hover:bg-slate-50 dark:hover:bg-slate-800/50 border border-transparent'
               }`}
               onClick={() => onConnectionSelect(connection)}
             >
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
-                  <h3 className="font-semibold text-gray-800 dark:text-white">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
                     {connection.name}
                   </h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    {connection.type}://{connection.username}@{connection.host}:
-                    {connection.port}/{connection.database}
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-mono truncate">
+                    {connection.type}://{connection.username}@{connection.host}:{connection.port}/{connection.database}
                   </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       handleTest(connection);
                     }}
                     disabled={testing === connection.id}
-                    className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors disabled:opacity-50"
+                    className="p-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded transition-colors disabled:opacity-50"
                     title="Test Connection"
                   >
                     <TestTube
-                      className={`w-4 h-4 ${testing === connection.id ? 'animate-spin' : ''}`}
+                      className={`w-3.5 h-3.5 ${testing === connection.id ? 'animate-spin' : ''}`}
                     />
                   </button>
                   <button
@@ -382,20 +388,20 @@ export default function ConnectionManager({
                       e.stopPropagation();
                       handleEdit(connection);
                     }}
-                    className="p-2 text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                    className="p-1.5 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors"
                     title="Edit Connection"
                   >
-                    <Edit className="w-4 h-4" />
+                    <Edit className="w-3.5 h-3.5" />
                   </button>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       handleDelete(connection.id);
                     }}
-                    className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                    className="p-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
                     title="Delete Connection"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>

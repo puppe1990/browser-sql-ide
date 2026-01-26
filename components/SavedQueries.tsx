@@ -131,10 +131,10 @@ export default function SavedQueries({
   }, {} as Record<string, SavedQuery[]>);
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 h-full flex flex-col">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
-          <FileText className="w-5 h-5" />
+    <div className="h-full flex flex-col bg-white dark:bg-slate-900">
+      <div className="flex justify-between items-center px-4 py-2.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900">
+        <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide flex items-center gap-2">
+          <FileText className="w-4 h-4" />
           Saved Queries
         </h2>
         <button
@@ -142,40 +142,54 @@ export default function SavedQueries({
             resetForm();
             setShowModal(true);
           }}
-          className="bg-primary-600 hover:bg-primary-700 text-white px-3 py-1.5 rounded-lg flex items-center gap-2 transition-colors text-sm"
+          className="px-2.5 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors flex items-center gap-1.5"
         >
-          <Plus className="w-4 h-4" />
+          <Plus className="w-3.5 h-3.5" />
           New
         </button>
       </div>
 
-      <div className="flex-1 overflow-auto space-y-4">
+      <div className="flex-1 overflow-auto p-3 space-y-3">
         {Object.keys(groupedQueries).length === 0 ? (
-          <p className="text-gray-500 dark:text-gray-400 text-center py-8">
-            No saved queries yet.
-          </p>
+          <div className="text-center py-12">
+            <FileText className="w-8 h-8 text-slate-400 dark:text-slate-600 mx-auto mb-2" />
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              No saved queries yet
+            </p>
+          </div>
         ) : (
           Object.entries(groupedQueries).map(([folder, folderQueries]) => (
             <div key={folder}>
-              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
-                <Folder className="w-4 h-4" />
+              <h3 className="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-2 flex items-center gap-1.5 uppercase tracking-wide">
+                <Folder className="w-3.5 h-3.5" />
                 {folder}
               </h3>
-              <div className="space-y-1">
+              <div className="space-y-1.5">
                 {folderQueries.map((query) => (
                   <div
                     key={query.id}
-                    className="p-3 border border-gray-200 dark:border-gray-700 rounded-lg hover:border-primary-300 dark:hover:border-primary-700 transition-colors"
+                    className="group p-2.5 border border-slate-200 dark:border-slate-800 rounded-lg hover:border-slate-300 dark:hover:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
                   >
-                    <div className="flex justify-between items-start mb-2">
-                      <h4 className="font-medium text-gray-800 dark:text-white text-sm">
-                        {query.name}
-                      </h4>
-                      <div className="flex gap-1">
+                    <div className="flex justify-between items-start gap-2">
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-medium text-slate-900 dark:text-slate-100 text-sm truncate">
+                          {query.name}
+                        </h4>
+                        {query.description && (
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+                            {query.description}
+                          </p>
+                        )}
+                        <pre className="text-xs text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800 p-1.5 rounded mt-1.5 overflow-x-auto font-mono">
+                          {query.query.substring(0, 80)}
+                          {query.query.length > 80 ? '...' : ''}
+                        </pre>
+                      </div>
+                      <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                         {onQueryExecute && (
                           <button
                             onClick={() => onQueryExecute(query.query)}
-                            className="p-1 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded transition-colors"
+                            className="p-1 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded transition-colors"
                             title="Execute Query"
                           >
                             <Play className="w-3.5 h-3.5" />
@@ -183,36 +197,27 @@ export default function SavedQueries({
                         )}
                         <button
                           onClick={() => onQuerySelect(query.query)}
-                          className="p-1 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
+                          className="p-1 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
                           title="Load Query"
                         >
                           <FileText className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => handleEdit(query)}
-                          className="p-1 text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                          className="p-1 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors"
                           title="Edit Query"
                         >
                           <Edit className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => handleDelete(query.id)}
-                          className="p-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                          className="p-1 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
                           title="Delete Query"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </div>
-                    {query.description && (
-                      <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
-                        {query.description}
-                      </p>
-                    )}
-                    <pre className="text-xs text-gray-500 dark:text-gray-500 bg-gray-50 dark:bg-gray-900 p-2 rounded mt-2 overflow-x-auto">
-                      {query.query.substring(0, 100)}
-                      {query.query.length > 100 ? '...' : ''}
-                    </pre>
                   </div>
                 ))}
               </div>

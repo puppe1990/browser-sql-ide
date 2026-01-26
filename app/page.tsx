@@ -104,53 +104,56 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-900 p-4 md:p-8">
-      <div className="max-w-7xl mx-auto">
-        <header className="mb-6">
-          <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">
-            Browser SQL IDE
-          </h1>
-          <p className="text-gray-600 dark:text-gray-400">
-            A comprehensive web-based SQL IDE for database management
-          </p>
-        </header>
-
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
-          {/* Connections Panel */}
-          <div className="lg:col-span-1">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+      <div className="flex h-screen overflow-hidden">
+        {/* Sidebar - Connections */}
+        <aside className="w-80 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col">
+          <div className="p-4 border-b border-slate-200 dark:border-slate-800">
+            <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">
+              Browser SQL IDE
+            </h1>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              Database management
+            </p>
+          </div>
+          <div className="flex-1 overflow-auto">
             <ConnectionManager
               onConnectionSelect={handleConnectionSelect}
               selectedConnectionId={selectedConnection?.id}
             />
           </div>
+        </aside>
 
-          {/* Main Content Area */}
-          <div className="lg:col-span-3 space-y-6">
-            {/* Query Editor */}
-            <div className="h-96">
-              <QueryEditor
+        {/* Main Content Area */}
+        <main className="flex-1 flex flex-col overflow-hidden">
+          {/* Query Editor */}
+          <div className="flex-1 flex flex-col border-b border-slate-200 dark:border-slate-800">
+            <QueryEditor
+              connectionId={selectedConnection?.id}
+              initialQuery={currentQuery}
+              onQuerySave={handleQuerySave}
+              onQueryResult={handleQueryResult}
+            />
+          </div>
+
+          {/* Query Results */}
+          {queryResult && (
+            <div className="flex-1 overflow-auto">
+              <DataVisualization result={queryResult} />
+            </div>
+          )}
+
+          {/* Saved Queries Panel */}
+          {!queryResult && (
+            <div className="h-80 border-t border-slate-200 dark:border-slate-800">
+              <SavedQueries
                 connectionId={selectedConnection?.id}
-                initialQuery={currentQuery}
-                onQuerySave={handleQuerySave}
-                onQueryResult={handleQueryResult}
+                onQuerySelect={handleQuerySelect}
+                onQueryExecute={handleQueryExecute}
               />
             </div>
-
-            {/* Query Results */}
-            {queryResult && (
-              <DataVisualization result={queryResult} />
-            )}
-          </div>
-        </div>
-
-        {/* Saved Queries Panel */}
-        <div className="h-96">
-          <SavedQueries
-            connectionId={selectedConnection?.id}
-            onQuerySelect={handleQuerySelect}
-            onQueryExecute={handleQueryExecute}
-          />
-        </div>
+          )}
+        </main>
       </div>
     </div>
   );

@@ -42,76 +42,76 @@ export default function DataVisualization({ result }: DataVisualizationProps) {
 
   if (!result || !result.rows || result.rows.length === 0) {
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 text-center">
-        <p className="text-gray-500 dark:text-gray-400">No data to display</p>
+      <div className="h-full flex items-center justify-center bg-white dark:bg-slate-900">
+        <p className="text-slate-500 dark:text-slate-400 text-sm">No data to display</p>
       </div>
     );
   }
 
   return (
     <div
-      className={`bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden ${
+      className={`h-full flex flex-col bg-white dark:bg-slate-900 overflow-hidden ${
         expanded ? 'fixed inset-4 z-50' : ''
       }`}
     >
-      <div className="flex justify-between items-center p-4 border-b border-gray-200 dark:border-gray-700">
-        <div className="flex items-center gap-4">
-          <h3 className="text-lg font-semibold text-gray-800 dark:text-white">
+      <div className="flex justify-between items-center px-4 py-2.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900">
+        <div className="flex items-center gap-3">
+          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
             Query Results
           </h3>
-          <span className="text-sm text-gray-600 dark:text-gray-400">
+          <span className="text-xs text-slate-500 dark:text-slate-400">
             {result.rowCount} row{result.rowCount !== 1 ? 's' : ''} • {result.executionTime}ms
           </span>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-1">
           <button
             onClick={() => setExpanded(!expanded)}
-            className="p-2 text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+            className="p-1.5 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition-colors"
             title={expanded ? 'Minimize' : 'Maximize'}
           >
-            <Maximize2 className="w-4 h-4" />
+            <Maximize2 className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={exportToCSV}
-            className="p-2 text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+            className="p-1.5 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition-colors"
             title="Export to CSV"
           >
-            <Download className="w-4 h-4" />
+            <Download className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
 
-      <div className="overflow-auto" style={{ maxHeight: expanded ? 'calc(100vh - 120px)' : '600px' }}>
+      <div className="flex-1 overflow-auto">
         <table className="w-full border-collapse">
           <thead>
-            <tr className="bg-gray-50 dark:bg-gray-900">
+            <tr className="bg-slate-50 dark:bg-slate-800/50">
               {result.columns.map((column) => (
                 <th
                   key={column}
-                  className="px-4 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-gray-50 dark:bg-gray-900"
+                  className="px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 sticky top-0 bg-slate-50 dark:bg-slate-800/50 z-10"
                 >
                   {column}
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+          <tbody className="bg-white dark:bg-slate-900 divide-y divide-slate-200 dark:divide-slate-800">
             {result.rows.map((row, rowIndex) => (
               <tr
                 key={rowIndex}
-                className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
               >
                 {result.columns.map((column) => {
                   const value = row[column];
                   let displayValue: string;
-                  let cellClass = 'px-4 py-3 text-sm text-gray-900 dark:text-gray-100';
+                  let cellClass = 'px-3 py-2 text-xs text-slate-900 dark:text-slate-100';
 
                   if (value === null || value === undefined) {
                     displayValue = 'NULL';
-                    cellClass += ' text-gray-400 italic';
+                    cellClass += ' text-slate-400 dark:text-slate-500 italic';
                   } else if (typeof value === 'object') {
                     displayValue = JSON.stringify(value);
-                    cellClass += ' font-mono text-xs';
+                    cellClass += ' font-mono';
                   } else {
                     displayValue = String(value);
                   }
