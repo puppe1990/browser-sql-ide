@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen, Columns } from 'lucide-react';
 import ConnectionManager from '@/components/ConnectionManager';
 import TabbedQueryEditor from '@/components/TabbedQueryEditor';
 import DataVisualization from '@/components/DataVisualization';
@@ -36,16 +36,22 @@ const STORAGE_KEYS = {
   SIDEBAR_OPEN: 'browser-sql-ide-sidebar-open',
   QUERY_RESULTS_HEIGHT: 'browser-sql-ide-query-results-height',
   SAVED_QUERIES_HEIGHT: 'browser-sql-ide-saved-queries-height',
+  SPLIT_SCREEN: 'browser-sql-ide-split-screen',
+  SPLIT_SCREEN_WIDTH: 'browser-sql-ide-split-screen-width',
 };
 
 export default function Home() {
   const [selectedConnection, setSelectedConnection] = useState<Connection | null>(null);
   const [queryResult, setQueryResult] = useState<QueryResultWithMeta | null>(null);
+  const [queryResult2, setQueryResult2] = useState<QueryResultWithMeta | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [splitScreen, setSplitScreen] = useState(false);
+  const [splitScreenWidth, setSplitScreenWidth] = useState<number>(50); // Percentage
   const [queryResultsHeight, setQueryResultsHeight] = useState<number>(400); // Default height in pixels
   const [savedQueriesHeight, setSavedQueriesHeight] = useState<number>(320); // Default height in pixels
   const [isResizing, setIsResizing] = useState(false);
   const [isResizingSavedQueries, setIsResizingSavedQueries] = useState(false);
+  const [isResizingSplit, setIsResizingSplit] = useState(false);
 
   // Load sidebar state and heights from localStorage on mount
   useEffect(() => {
@@ -69,6 +75,19 @@ export default function Home() {
         setSavedQueriesHeight(height);
       }
     }
+    
+    const savedSplitScreen = localStorage.getItem(STORAGE_KEYS.SPLIT_SCREEN);
+    if (savedSplitScreen !== null) {
+      setSplitScreen(savedSplitScreen === 'true');
+    }
+    
+    const savedSplitScreenWidth = localStorage.getItem(STORAGE_KEYS.SPLIT_SCREEN_WIDTH);
+    if (savedSplitScreenWidth !== null) {
+      const width = parseFloat(savedSplitScreenWidth);
+      if (!isNaN(width) && width > 0 && width < 100) {
+        setSplitScreenWidth(width);
+      }
+    }
   }, []);
 
   // Save sidebar state to localStorage when it changes
@@ -85,6 +104,16 @@ export default function Home() {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.SAVED_QUERIES_HEIGHT, String(savedQueriesHeight));
   }, [savedQueriesHeight]);
+
+  // Save split screen state to localStorage when it changes
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.SPLIT_SCREEN, String(splitScreen));
+  }, [splitScreen]);
+
+  // Save split screen width to localStorage when it changes
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.SPLIT_SCREEN_WIDTH, String(splitScreenWidth));
+  }, [splitScreenWidth]);
 
   // Handle resizing for Query Results
   useEffect(() => {
@@ -164,12 +193,56 @@ export default function Home() {
     };
   }, [isResizingSavedQueries]);
 
+  // Handle resizing for Split Screen
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizingSplit || !splitScreen) return;
+      
+      const mainElement = document.querySelector('main');
+      if (!mainElement) return;
+      
+      const mainRect = mainElement.getBoundingClientRect();
+      const relativeX = e.clientX - mainRect.left;
+      const percentage = (relativeX / mainRect.width) * 100;
+      
+      // Set min and max widths (20% to 80%)
+      const minWidth = 20;
+      const maxWidth = 80;
+      
+      if (percentage >= minWidth && percentage <= maxWidth) {
+        setSplitScreenWidth(percentage);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingSplit(false);
+    };
+
+    if (isResizingSplit) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isResizingSplit, splitScreen]);
+
   const handleConnectionSelect = (connection: Connection) => {
     setSelectedConnection(connection);
   };
 
-  const handleQueryResult = (result: QueryResult, query?: string) => {
-    setQueryResult({ ...result, query });
+  const handleQueryResult = (result: QueryResult, query?: string, isSecondEditor = false) => {
+    if (isSecondEditor) {
+      setQueryResult2({ ...result, query });
+    } else {
+      setQueryResult({ ...result, query });
+    }
   };
 
   const handleQuerySave = async (query: string) => {
@@ -296,28 +369,93 @@ export default function Home() {
               <PanelLeftOpen className="w-4 h-4" />
             </button>
           )}
-          {/* Query Editor with Tabs */}
-          <div 
-            className="flex flex-col border-b border-slate-200 dark:border-slate-800"
-            style={{ 
-              height: queryResult 
-                ? `calc(100% - ${queryResultsHeight}px - 4px)` 
-                : !queryResult 
-                  ? `calc(100% - ${savedQueriesHeight}px - 4px)`
-                  : '100%',
-              minHeight: (queryResult || !queryResult) ? '200px' : '0'
-            }}
+          
+          {/* Split Screen Toggle Button */}
+          <button
+            onClick={() => setSplitScreen(!splitScreen)}
+            className={`absolute right-2 top-2 z-10 p-2 rounded transition-colors shadow-sm ${
+              splitScreen
+                ? 'bg-blue-600 text-white hover:bg-blue-700'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+            title={splitScreen ? 'Disable Split Screen' : 'Enable Split Screen'}
           >
-            <TabbedQueryEditor
-              connectionId={selectedConnection?.id}
-              onQuerySave={handleQuerySave}
-              onQueryResult={handleQueryResult}
-              onQuerySelect={handleQuerySelect}
-            />
-          </div>
+            <Columns className="w-4 h-4" />
+          </button>
+
+          {/* Query Editor(s) */}
+          {splitScreen ? (
+            // Split Screen Mode
+            <div 
+              className="flex flex-row border-b border-slate-200 dark:border-slate-800"
+              style={{ 
+                height: (queryResult || queryResult2)
+                  ? `calc(100% - ${queryResultsHeight}px - 4px)` 
+                  : `calc(100% - ${savedQueriesHeight}px - 4px)`,
+                minHeight: '200px'
+              }}
+            >
+              {/* First Editor */}
+              <div 
+                className="flex flex-col border-r border-slate-200 dark:border-slate-800"
+                style={{ width: `${splitScreenWidth}%` }}
+              >
+                <TabbedQueryEditor
+                  connectionId={selectedConnection?.id}
+                  onQuerySave={handleQuerySave}
+                  onQueryResult={(result, query) => handleQueryResult(result, query, false)}
+                  onQuerySelect={handleQuerySelect}
+                />
+              </div>
+
+              {/* Split Resizer */}
+              <div
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setIsResizingSplit(true);
+                }}
+                className="w-1 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 cursor-col-resize transition-colors relative group flex-shrink-0"
+              >
+                <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-1 bg-transparent group-hover:bg-blue-500 dark:group-hover:bg-blue-400 transition-colors" />
+              </div>
+
+              {/* Second Editor */}
+              <div 
+                className="flex flex-col"
+                style={{ width: `${100 - splitScreenWidth}%` }}
+              >
+                <TabbedQueryEditor
+                  connectionId={selectedConnection?.id}
+                  onQuerySave={handleQuerySave}
+                  onQueryResult={(result, query) => handleQueryResult(result, query, true)}
+                  onQuerySelect={handleQuerySelect}
+                />
+              </div>
+            </div>
+          ) : (
+            // Single Editor Mode
+            <div 
+              className="flex flex-col border-b border-slate-200 dark:border-slate-800"
+              style={{ 
+                height: queryResult 
+                  ? `calc(100% - ${queryResultsHeight}px - 4px)` 
+                  : !queryResult 
+                    ? `calc(100% - ${savedQueriesHeight}px - 4px)`
+                    : '100%',
+                minHeight: (queryResult || !queryResult) ? '200px' : '0'
+              }}
+            >
+              <TabbedQueryEditor
+                connectionId={selectedConnection?.id}
+                onQuerySave={handleQuerySave}
+                onQueryResult={handleQueryResult}
+                onQuerySelect={handleQuerySelect}
+              />
+            </div>
+          )}
 
           {/* Resizer for Query Results */}
-          {queryResult && (
+          {(queryResult || queryResult2) && (
             <div
               onMouseDown={(e) => {
                 e.preventDefault();
@@ -331,21 +469,57 @@ export default function Home() {
           )}
 
           {/* Query Results */}
-          {queryResult && (
-            <div 
-              className="overflow-hidden"
-              style={{ 
-                height: `${queryResultsHeight}px`,
-                minHeight: '200px',
-                flexShrink: 0
-              }}
-            >
-              <DataVisualization 
-                result={queryResult} 
-                connectionId={selectedConnection?.id}
-                query={queryResult.query}
-              />
+          {splitScreen ? (
+            // Split Screen Results
+            <div className="flex flex-row" style={{ height: `${queryResultsHeight}px`, minHeight: '200px', flexShrink: 0 }}>
+              {queryResult && (
+                <div 
+                  className="overflow-hidden border-r border-slate-200 dark:border-slate-800"
+                  style={{ width: `${splitScreenWidth}%` }}
+                >
+                  <DataVisualization 
+                    result={queryResult} 
+                    connectionId={selectedConnection?.id}
+                    query={queryResult.query}
+                  />
+                </div>
+              )}
+              {queryResult2 && (
+                <div 
+                  className="overflow-hidden"
+                  style={{ width: queryResult ? `${100 - splitScreenWidth}%` : '100%' }}
+                >
+                  <DataVisualization 
+                    result={queryResult2} 
+                    connectionId={selectedConnection?.id}
+                    query={queryResult2.query}
+                  />
+                </div>
+              )}
+              {!queryResult && !queryResult2 && (
+                <div className="flex-1 flex items-center justify-center text-slate-500 dark:text-slate-400 text-sm">
+                  Execute queries to see results
+                </div>
+              )}
             </div>
+          ) : (
+            // Single Result
+            queryResult && (
+              <div 
+                className="overflow-hidden"
+                style={{ 
+                  height: `${queryResultsHeight}px`,
+                  minHeight: '200px',
+                  flexShrink: 0
+                }}
+              >
+                <DataVisualization 
+                  result={queryResult} 
+                  connectionId={selectedConnection?.id}
+                  query={queryResult.query}
+                />
+              </div>
+            )
           )}
 
           {/* Resizer for Saved Queries */}
