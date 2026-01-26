@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { PanelLeftClose, PanelLeftOpen, Columns, GitCompare, X, RefreshCw, Play, Loader2 } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen, Columns, GitCompare, X, RefreshCw, Play, Loader2, Download } from 'lucide-react';
 import ConnectionManager from '@/components/ConnectionManager';
 import TabbedQueryEditor from '@/components/TabbedQueryEditor';
 import DataVisualization from '@/components/DataVisualization';
@@ -533,6 +533,100 @@ export default function Home() {
     return compared;
   }, [compareMode, compareKey, compareFields, queryResult, queryResult2]);
 
+  // Export comparison results to CSV
+  const handleExportCompare = () => {
+    if (!comparedResults || comparedResults.length === 0) {
+      alert('No comparison results to export');
+      return;
+    }
+
+    // Build CSV headers
+    const headers = [
+      'Key Value',
+      'Status',
+      'Left Count',
+      'Right Count'
+    ];
+
+    // Add field comparison columns if fields are selected
+    if (compareFields.length > 0) {
+      compareFields.forEach(field => {
+        headers.push(`${field} (Left)`, `${field} (Right)`, `${field} (Match)`);
+      });
+    } else {
+      // Add all common columns from both results
+      const allColumns = new Set<string>();
+      if (queryResult && queryResult2) {
+        queryResult.columns.forEach(col => allColumns.add(col));
+        queryResult2.columns.forEach(col => allColumns.add(col));
+      }
+      allColumns.forEach(col => {
+        headers.push(`${col} (Left)`, `${col} (Right)`);
+      });
+    }
+
+    // Build CSV rows
+    const rows = comparedResults.map((item: any) => {
+      const row: string[] = [
+        String(item.key || '(null)'),
+        item.status,
+        String(item.leftRows.length),
+        String(item.rightRows.length)
+      ];
+
+      if (compareFields.length > 0) {
+        // Export field comparisons
+        compareFields.forEach(field => {
+          const comparison = item.fieldComparisons?.[field];
+          if (comparison) {
+            const leftValue = comparison.left ?? 'NULL';
+            const rightValue = comparison.right ?? 'NULL';
+            const match = comparison.match ? 'Yes' : 'No';
+            row.push(
+              String(leftValue).replace(/"/g, '""'),
+              String(rightValue).replace(/"/g, '""'),
+              match
+            );
+          } else {
+            row.push('N/A', 'N/A', 'N/A');
+          }
+        });
+      } else {
+        // Export all columns from first row of each side
+        const allColumns = new Set<string>();
+        if (queryResult && queryResult2) {
+          queryResult.columns.forEach(col => allColumns.add(col));
+          queryResult2.columns.forEach(col => allColumns.add(col));
+        }
+        allColumns.forEach(col => {
+          const leftValue = item.leftRows[0]?.[col] ?? 'NULL';
+          const rightValue = item.rightRows[0]?.[col] ?? 'NULL';
+          row.push(
+            String(leftValue).replace(/"/g, '""'),
+            String(rightValue).replace(/"/g, '""')
+          );
+        });
+      }
+
+      return row;
+    });
+
+    // Convert to CSV format
+    const csvContent = [
+      headers.map(h => `"${h.replace(/"/g, '""')}"`).join(','),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+
+    // Create and download file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `comparison_${compareKey}_${Date.now()}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
   const handleQuerySave = async (query: string) => {
     if (!selectedConnection) {
       alert('Please select a connection first');
@@ -855,6 +949,14 @@ export default function Home() {
                       )}
                     </div>
                     <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleExportCompare}
+                        className="px-2 py-1 text-xs bg-purple-600 hover:bg-purple-700 text-white rounded transition-colors flex items-center gap-1"
+                        title="Export comparison results to CSV"
+                      >
+                        <Download className="w-3 h-3" />
+                        Export
+                      </button>
                       <button
                         onClick={handleReExecuteCompare}
                         disabled={isReExecuting}
