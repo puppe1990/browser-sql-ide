@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
 import { Play, Save, Loader2 } from 'lucide-react';
+import { processQuery } from '@/lib/query-utils';
 
 interface QueryEditorProps {
   connectionId?: number;
@@ -40,10 +41,13 @@ export default function QueryEditor({
   const [isExecuting, setIsExecuting] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [errorLine, setErrorLine] = useState<number | null>(null);
   const editorRef = useRef<any>(null);
+  const monacoRef = useRef<any>(null);
   const isExecutingRef = useRef(false);
   const connectionIdRef = useRef(connectionId);
   const handleExecuteRef = useRef<((queryToExecute?: string) => Promise<void>) | null>(null);
+  const errorDecorationRef = useRef<any>(null);
 
   // Update query when initialQuery prop changes (always update, even if empty string)
   // Also reset result and error when switching tabs
@@ -53,11 +57,128 @@ export default function QueryEditor({
       setQuery(initialQuery || '');
       setResult(null);
       setError(null);
+      setErrorLine(null);
+      // Clear error decoration when switching tabs
+      if (editorRef.current && errorDecorationRef.current) {
+        editorRef.current.deltaDecorations([errorDecorationRef.current], []);
+        errorDecorationRef.current = null;
+      }
     } else if (initialQuery !== undefined) {
       // Standalone mode - only update if initialQuery is provided
       setQuery(initialQuery);
     }
   }, [initialQuery, onQueryChange]);
+
+  // Function to find line number from error message
+  const findErrorLine = (errorMessage: string, queryText: string): number | null => {
+    // Try to extract line number from error message (common patterns)
+    const lineNumberMatch = errorMessage.match(/line\s+(\d+)|position\s+(\d+)|at\s+line\s+(\d+)/i);
+    if (lineNumberMatch) {
+      const lineNum = parseInt(lineNumberMatch[1] || lineNumberMatch[2] || lineNumberMatch[3], 10);
+      if (lineNum > 0) {
+        return lineNum;
+      }
+    }
+
+    // Try to find column name or table name in error and locate it in query
+    const lines = queryText.split('\n');
+    const errorLower = errorMessage.toLowerCase();
+    
+    // Common error patterns - extract column/table name
+    const columnMatch = errorMessage.match(/column\s+["']?(\w+)["']?/i);
+    const tableMatch = errorMessage.match(/table\s+["']?(\w+)["']?/i);
+    const relationMatch = errorMessage.match(/relation\s+["']?(\w+)["']?/i);
+    
+    const searchTerm = columnMatch?.[1] || tableMatch?.[1] || relationMatch?.[1];
+    
+    if (searchTerm) {
+      // Search for the term in query lines (prioritize WHERE clauses and lines with semicolons)
+      const searchTermLower = searchTerm.toLowerCase();
+      
+      // First, check lines with WHERE clause or semicolons (most likely to contain the error)
+      for (let i = lines.length - 1; i >= 0; i--) {
+        const line = lines[i];
+        const lineLower = line.toLowerCase();
+        const lineTrimmed = line.trim();
+        
+        // Check if line contains WHERE or ends with semicolon and contains the search term
+        if ((lineLower.includes('where') || lineTrimmed.endsWith(';')) && 
+            lineLower.includes(searchTermLower)) {
+          return i + 1; // Return 1-based line number
+        }
+      }
+      
+      // If not found, search all lines
+      for (let i = 0; i < lines.length; i++) {
+        const lineLower = lines[i].toLowerCase();
+        // Check if line contains the search term (as a whole word or column reference)
+        if (lineLower.includes(searchTermLower)) {
+          return i + 1; // Return 1-based line number
+        }
+      }
+    }
+
+    // If error mentions specific SQL keywords, try to find them
+    if (errorLower.includes('syntax error') || errorLower.includes('parse error')) {
+      // For syntax errors, check lines with semicolons or WHERE clauses
+      for (let i = lines.length - 1; i >= 0; i--) {
+        const line = lines[i].trim();
+        if (line.endsWith(';') || line.toLowerCase().startsWith('where')) {
+          return i + 1;
+        }
+      }
+    }
+
+    return null;
+  };
+
+  // Highlight error line in editor
+  useEffect(() => {
+    if (error && errorLine && editorRef.current && monacoRef.current) {
+      const editor = editorRef.current;
+      const monaco = monacoRef.current;
+      
+      // Remove previous decoration
+      const oldDecorations = errorDecorationRef.current ? [errorDecorationRef.current] : [];
+      
+      // Add new decoration to highlight the error line
+      const lineNumber = errorLine;
+      const maxColumn = editor.getModel()?.getLineMaxColumn(lineNumber) || 1;
+      const range = new monaco.Range(lineNumber, 1, lineNumber, maxColumn);
+      
+      const newDecorations = editor.deltaDecorations(
+        oldDecorations,
+        [
+          {
+            range: range,
+            options: {
+              isWholeLine: true,
+              className: 'monaco-error-line',
+              glyphMarginClassName: 'monaco-error-glyph',
+              minimap: {
+                color: '#ef4444',
+                position: monaco.editor.MinimapPosition.Inline,
+              },
+              overviewRuler: {
+                color: '#ef4444',
+                position: monaco.editor.OverviewRulerLane.Right,
+              },
+              hoverMessage: { value: error },
+            },
+          },
+        ]
+      );
+      
+      errorDecorationRef.current = newDecorations[0];
+      
+      // Scroll to error line
+      editor.revealLineInCenter(lineNumber);
+    } else if (!error && errorDecorationRef.current && editorRef.current) {
+      // Clear decoration when error is cleared
+      editorRef.current.deltaDecorations([errorDecorationRef.current], []);
+      errorDecorationRef.current = null;
+    }
+  }, [error, errorLine]);
 
   // Save query to localStorage when it changes (debounced) - only if onQueryChange is not provided (fallback for non-tabbed usage)
   useEffect(() => {
@@ -97,7 +218,9 @@ export default function QueryEditor({
           
           const currentQuery = editor.getValue();
           if (connectionIdRef.current && currentQuery.trim() && !isExecutingRef.current && handleExecuteRef.current) {
-            handleExecuteRef.current(currentQuery);
+            // Process query to ensure complete lines with semicolons are considered
+            const processedQuery = processQuery(currentQuery);
+            handleExecuteRef.current(processedQuery);
           }
         }
       }
@@ -111,6 +234,7 @@ export default function QueryEditor({
 
   const handleEditorDidMount = (editor: any, monaco: any) => {
     editorRef.current = editor;
+    monacoRef.current = monaco;
     // Configure SQL language features
     editor.updateOptions({
       minimap: { enabled: false },
@@ -124,7 +248,9 @@ export default function QueryEditor({
     const executeCommand = () => {
       const currentQuery = editor.getValue();
       if (connectionIdRef.current && currentQuery.trim() && !isExecutingRef.current && handleExecuteRef.current) {
-        handleExecuteRef.current(currentQuery);
+        // Process query to ensure complete lines with semicolons are considered
+        const processedQuery = processQuery(currentQuery);
+        handleExecuteRef.current(processedQuery);
       }
     };
 
@@ -148,7 +274,17 @@ export default function QueryEditor({
 
     setIsExecuting(true);
     setError(null);
+    setErrorLine(null);
     setResult(null);
+
+    // Clear previous error decoration
+    if (editorRef.current && errorDecorationRef.current) {
+      editorRef.current.deltaDecorations([errorDecorationRef.current], []);
+      errorDecorationRef.current = null;
+    }
+
+    // Process query to ensure complete lines with semicolons are considered
+    const processedQuery = processQuery(queryValue);
 
     try {
       const response = await fetch('/api/query/execute', {
@@ -156,7 +292,7 @@ export default function QueryEditor({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           connectionId,
-          query: queryValue.trim(),
+          query: processedQuery,
         }),
       });
 
@@ -168,10 +304,22 @@ export default function QueryEditor({
           onQueryResult(data.result);
         }
       } else {
-        setError(data.error || 'Query execution failed');
+        const errorMessage = data.error || 'Query execution failed';
+        setError(errorMessage);
+        // Try to find the line number where the error occurred
+        const lineNum = findErrorLine(errorMessage, queryValue);
+        if (lineNum) {
+          setErrorLine(lineNum);
+        }
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to execute query');
+      const errorMessage = err.message || 'Failed to execute query';
+      setError(errorMessage);
+      // Try to find the line number where the error occurred
+      const lineNum = findErrorLine(errorMessage, queryValue);
+      if (lineNum) {
+        setErrorLine(lineNum);
+      }
     } finally {
       setIsExecuting(false);
     }
@@ -248,7 +396,14 @@ export default function QueryEditor({
           {error && (
             <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded p-2">
               <p className="text-red-800 dark:text-red-200 text-xs font-semibold">Error:</p>
-              <p className="text-red-700 dark:text-red-300 text-xs mt-1">{error}</p>
+              <p className="text-red-700 dark:text-red-300 text-xs mt-1">
+                {error}
+                {errorLine && (
+                  <span className="block mt-1 text-red-600 dark:text-red-400 font-medium">
+                    → Line {errorLine}
+                  </span>
+                )}
+              </p>
             </div>
           )}
           {result && (

@@ -33,6 +33,20 @@ body {
   border-radius: 0.5rem;
 }
 
+/* Error line highlighting in Monaco Editor */
+.monaco-error-line {
+  background-color: rgba(239, 68, 68, 0.1) !important;
+}
+
+.dark .monaco-error-line {
+  background-color: rgba(239, 68, 68, 0.2) !important;
+}
+
+.monaco-error-glyph {
+  background-color: #ef4444 !important;
+  width: 4px !important;
+}
+
 /* Scrollbar styles */
 ::-webkit-scrollbar {
   width: 10px;

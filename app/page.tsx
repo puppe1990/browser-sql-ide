@@ -6,6 +6,7 @@ import ConnectionManager from '@/components/ConnectionManager';
 import TabbedQueryEditor from '@/components/TabbedQueryEditor';
 import DataVisualization from '@/components/DataVisualization';
 import SavedQueries from '@/components/SavedQueries';
+import { processQuery } from '@/lib/query-utils';
 
 interface Connection {
   id: number;
@@ -105,13 +106,16 @@ export default function Home() {
       (window as any).addQueryToTab(query);
     }
     
+    // Process query to ensure complete lines with semicolons are considered
+    const processedQuery = processQuery(query);
+    
     try {
       const response = await fetch('/api/query/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           connectionId: selectedConnection.id,
-          query: query.trim(),
+          query: processedQuery,
         }),
       });
 
