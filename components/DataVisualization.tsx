@@ -154,22 +154,22 @@ export default function DataVisualization({ result, connectionId, query }: DataV
 
       <div 
         ref={scrollContainerRef}
-        className="flex-1 overflow-auto"
+        className="flex-1 overflow-auto relative"
       >
         <table className="w-full border-collapse">
-          <thead>
-            <tr className="bg-slate-50 dark:bg-slate-800/50">
+          <thead className="sticky top-0 z-20">
+            <tr className="bg-slate-50 dark:bg-slate-800">
               {result.columns.map((column) => (
                 <th
                   key={column}
-                  className="px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 sticky top-0 bg-slate-50 dark:bg-slate-800/50 z-10"
+                  className="px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
                 >
                   {column}
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody className="bg-white dark:bg-slate-900 divide-y divide-slate-200 dark:divide-slate-800">
+          <tbody className="bg-white dark:bg-slate-900 divide-y divide-slate-200 dark:divide-slate-800 relative z-0">
             {allRows.map((row, rowIndex) => (
               <tr
                 key={rowIndex}
