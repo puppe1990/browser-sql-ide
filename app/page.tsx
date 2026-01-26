@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import ConnectionManager from '@/components/ConnectionManager';
 import QueryEditor from '@/components/QueryEditor';
@@ -25,11 +25,34 @@ interface QueryResult {
   executionTime: number;
 }
 
+const STORAGE_KEYS = {
+  SIDEBAR_OPEN: 'browser-sql-ide-sidebar-open',
+  QUERY: 'browser-sql-ide-query',
+};
+
 export default function Home() {
   const [selectedConnection, setSelectedConnection] = useState<Connection | null>(null);
   const [queryResult, setQueryResult] = useState<QueryResult | null>(null);
   const [currentQuery, setCurrentQuery] = useState('');
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Load sidebar state and query from localStorage on mount
+  useEffect(() => {
+    const savedSidebarOpen = localStorage.getItem(STORAGE_KEYS.SIDEBAR_OPEN);
+    if (savedSidebarOpen !== null) {
+      setSidebarOpen(savedSidebarOpen === 'true');
+    }
+    
+    const savedQuery = localStorage.getItem(STORAGE_KEYS.QUERY);
+    if (savedQuery !== null) {
+      setCurrentQuery(savedQuery);
+    }
+  }, []);
+
+  // Save sidebar state to localStorage when it changes
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.SIDEBAR_OPEN, String(sidebarOpen));
+  }, [sidebarOpen]);
 
   const handleConnectionSelect = (connection: Connection) => {
     setSelectedConnection(connection);
@@ -73,6 +96,7 @@ export default function Home() {
 
   const handleQuerySelect = (query: string) => {
     setCurrentQuery(query);
+    localStorage.setItem(STORAGE_KEYS.QUERY, query);
   };
 
   const handleQueryExecute = async (query: string) => {
@@ -82,6 +106,7 @@ export default function Home() {
     }
 
     setCurrentQuery(query);
+    localStorage.setItem(STORAGE_KEYS.QUERY, query);
     
     try {
       const response = await fetch('/api/query/execute', {

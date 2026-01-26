@@ -11,24 +11,48 @@ interface QueryEditorProps {
   onQueryResult?: (result: any) => void;
 }
 
+const STORAGE_KEY = 'browser-sql-ide-query';
+
 export default function QueryEditor({
   connectionId,
   initialQuery = '',
   onQuerySave,
   onQueryResult,
 }: QueryEditorProps) {
-  const [query, setQuery] = useState(initialQuery);
+  // Load query from localStorage on mount if initialQuery is empty
+  const [query, setQuery] = useState(() => {
+    if (initialQuery) {
+      return initialQuery;
+    }
+    if (typeof window !== 'undefined') {
+      const savedQuery = localStorage.getItem(STORAGE_KEY);
+      return savedQuery || '';
+    }
+    return '';
+  });
   const [isExecuting, setIsExecuting] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const editorRef = useRef<any>(null);
   const isExecutingRef = useRef(false);
   const connectionIdRef = useRef(connectionId);
+  const handleExecuteRef = useRef<((queryToExecute?: string) => Promise<void>) | null>(null);
 
   // Update query when initialQuery prop changes
   useEffect(() => {
-    setQuery(initialQuery);
+    if (initialQuery) {
+      setQuery(initialQuery);
+    }
   }, [initialQuery]);
+
+  // Save query to localStorage when it changes (debounced)
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      localStorage.setItem(STORAGE_KEY, query);
+    }, 500); // Debounce by 500ms to avoid too frequent writes
+
+    return () => clearTimeout(timeoutId);
+  }, [query]);
 
   // Keep refs in sync
   useEffect(() => {
@@ -38,6 +62,36 @@ export default function QueryEditor({
   useEffect(() => {
     connectionIdRef.current = connectionId;
   }, [connectionId]);
+
+  // Add global keyboard shortcut listener as fallback
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+      const isCtrlCmd = isMac ? e.metaKey : e.ctrlKey;
+      
+      // Check if editor is focused (Monaco editor has focus)
+      if (isCtrlCmd && e.key === 'Enter' && editorRef.current) {
+        const editor = editorRef.current;
+        const editorElement = editor.getContainerDomNode();
+        
+        // Only execute if editor or its container has focus
+        if (document.activeElement === editorElement || editorElement.contains(document.activeElement)) {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          const currentQuery = editor.getValue();
+          if (connectionIdRef.current && currentQuery.trim() && !isExecutingRef.current && handleExecuteRef.current) {
+            handleExecuteRef.current(currentQuery);
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
 
   const handleEditorDidMount = (editor: any, monaco: any) => {
     editorRef.current = editor;
@@ -51,14 +105,16 @@ export default function QueryEditor({
 
     // Add keyboard shortcut: Ctrl+Enter (Windows/Linux) or Cmd+Return (Mac) to execute query
     // KeyMod.CtrlCmd automatically handles Ctrl on Windows/Linux and Cmd on Mac
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
-      // Get current query value from editor
+    const executeCommand = () => {
       const currentQuery = editor.getValue();
-      if (connectionIdRef.current && currentQuery.trim() && !isExecutingRef.current) {
-        // Execute with current editor value
-        handleExecute(currentQuery);
+      if (connectionIdRef.current && currentQuery.trim() && !isExecutingRef.current && handleExecuteRef.current) {
+        handleExecuteRef.current(currentQuery);
       }
-    });
+    };
+
+    // Register the command with Monaco Editor
+    // Using KeyMod.CtrlCmd which works for both Ctrl (Windows/Linux) and Cmd (Mac)
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, executeCommand);
   };
 
   const handleExecute = async (queryToExecute?: string) => {
@@ -105,6 +161,11 @@ export default function QueryEditor({
     }
   };
 
+  // Keep handleExecute ref in sync
+  useEffect(() => {
+    handleExecuteRef.current = handleExecute;
+  });
+
   const handleSave = () => {
     if (onQuerySave) {
       onQuerySave(query);
@@ -127,7 +188,7 @@ export default function QueryEditor({
             Save
           </button>
           <button
-            onClick={handleExecute}
+            onClick={() => handleExecute()}
             disabled={isExecuting || !connectionId}
             className="px-3 py-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
           >
