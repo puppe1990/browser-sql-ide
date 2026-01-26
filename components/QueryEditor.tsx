@@ -18,17 +18,28 @@ export default function QueryEditor({
   onQueryResult,
 }: QueryEditorProps) {
   const [query, setQuery] = useState(initialQuery);
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [result, setResult] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
+  const editorRef = useRef<any>(null);
+  const isExecutingRef = useRef(false);
+  const connectionIdRef = useRef(connectionId);
 
   // Update query when initialQuery prop changes
   useEffect(() => {
     setQuery(initialQuery);
   }, [initialQuery]);
-  const [isExecuting, setIsExecuting] = useState(false);
-  const [result, setResult] = useState<any>(null);
-  const [error, setError] = useState<string | null>(null);
-  const editorRef = useRef<any>(null);
 
-  const handleEditorDidMount = (editor: any) => {
+  // Keep refs in sync
+  useEffect(() => {
+    isExecutingRef.current = isExecuting;
+  }, [isExecuting]);
+
+  useEffect(() => {
+    connectionIdRef.current = connectionId;
+  }, [connectionId]);
+
+  const handleEditorDidMount = (editor: any, monaco: any) => {
     editorRef.current = editor;
     // Configure SQL language features
     editor.updateOptions({
@@ -37,15 +48,28 @@ export default function QueryEditor({
       wordWrap: 'on',
       automaticLayout: true,
     });
+
+    // Add keyboard shortcut: Ctrl+Enter (Windows/Linux) or Cmd+Return (Mac) to execute query
+    // KeyMod.CtrlCmd automatically handles Ctrl on Windows/Linux and Cmd on Mac
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
+      // Get current query value from editor
+      const currentQuery = editor.getValue();
+      if (connectionIdRef.current && currentQuery.trim() && !isExecutingRef.current) {
+        // Execute with current editor value
+        handleExecute(currentQuery);
+      }
+    });
   };
 
-  const handleExecute = async () => {
+  const handleExecute = async (queryToExecute?: string) => {
+    const queryValue = queryToExecute || query;
+    
     if (!connectionId) {
       alert('Please select a connection first');
       return;
     }
 
-    if (!query.trim()) {
+    if (!queryValue.trim()) {
       alert('Please enter a query');
       return;
     }
@@ -60,7 +84,7 @@ export default function QueryEditor({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           connectionId,
-          query: query.trim(),
+          query: queryValue.trim(),
         }),
       });
 
