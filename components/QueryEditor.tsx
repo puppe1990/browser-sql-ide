@@ -273,11 +273,26 @@ export default function QueryEditor({
           e.preventDefault();
           e.stopPropagation();
           
-          const currentQuery = editor.getValue();
+          const selection = editor.getSelection();
+          let queryToExecute: string;
+          
+          // If there's a selection, use only the selected text
+          if (selection && !selection.isEmpty()) {
+            const model = editor.getModel();
+            if (model) {
+              queryToExecute = model.getValueInRange(selection);
+            } else {
+              queryToExecute = editor.getValue();
+            }
+          } else {
+            // No selection, use entire query
+            queryToExecute = editor.getValue();
+          }
+          
           const currentConnectionId = selectedConnectionId || connectionIdRef.current;
-          if (currentConnectionId && currentQuery.trim() && !isExecutingRef.current && handleExecuteRef.current) {
+          if (currentConnectionId && queryToExecute.trim() && !isExecutingRef.current && handleExecuteRef.current) {
             // Process query to ensure complete lines with semicolons are considered
-            const processedQuery = processQuery(currentQuery);
+            const processedQuery = processQuery(queryToExecute);
             handleExecuteRef.current(processedQuery);
           }
         }
@@ -304,11 +319,26 @@ export default function QueryEditor({
     // Add keyboard shortcut: Ctrl+Enter (Windows/Linux) or Cmd+Return (Mac) to execute query
     // KeyMod.CtrlCmd automatically handles Ctrl on Windows/Linux and Cmd on Mac
     const executeCommand = () => {
-      const currentQuery = editor.getValue();
+      const selection = editor.getSelection();
+      let queryToExecute: string;
+      
+      // If there's a selection, use only the selected text
+      if (selection && !selection.isEmpty()) {
+        const model = editor.getModel();
+        if (model) {
+          queryToExecute = model.getValueInRange(selection);
+        } else {
+          queryToExecute = editor.getValue();
+        }
+      } else {
+        // No selection, use entire query
+        queryToExecute = editor.getValue();
+      }
+      
       const currentConnectionId = selectedConnectionId || connectionIdRef.current;
-      if (currentConnectionId && currentQuery.trim() && !isExecutingRef.current && handleExecuteRef.current) {
+      if (currentConnectionId && queryToExecute.trim() && !isExecutingRef.current && handleExecuteRef.current) {
         // Process query to ensure complete lines with semicolons are considered
-        const processedQuery = processQuery(currentQuery);
+        const processedQuery = processQuery(queryToExecute);
         handleExecuteRef.current(processedQuery);
       }
     };
@@ -319,7 +349,31 @@ export default function QueryEditor({
   };
 
   const handleExecute = async (queryToExecute?: string) => {
-    const queryValue = queryToExecute || query;
+    let queryValue: string;
+    
+    // If queryToExecute is provided, use it
+    if (queryToExecute) {
+      queryValue = queryToExecute;
+    } else {
+      // Check if there's a selection in the editor
+      if (editorRef.current) {
+        const selection = editorRef.current.getSelection();
+        if (selection && !selection.isEmpty()) {
+          // Use selected text
+          const model = editorRef.current.getModel();
+          if (model) {
+            queryValue = model.getValueInRange(selection);
+          } else {
+            queryValue = query;
+          }
+        } else {
+          // No selection, use entire query
+          queryValue = query;
+        }
+      } else {
+        queryValue = query;
+      }
+    }
     
     const connectionToUse = selectedConnectionId || connectionId;
     if (!connectionToUse) {
@@ -328,7 +382,7 @@ export default function QueryEditor({
     }
 
     if (!queryValue.trim()) {
-      alert('Please enter a query');
+      alert('Please enter a query or select text to execute');
       return;
     }
 
