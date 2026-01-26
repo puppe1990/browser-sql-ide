@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Folder, FileText, Edit, Trash2, Play, X, Plus } from 'lucide-react';
+import { Folder, FileText, Edit, Trash2, Play, X, Plus, Copy } from 'lucide-react';
 
 interface SavedQuery {
   id: number;
@@ -111,6 +111,35 @@ export default function SavedQueries({
     setShowModal(true);
   };
 
+  const handleDuplicate = async (query: SavedQuery) => {
+    try {
+      // Create a new query with a modified name
+      const duplicateName = `${query.name} (Copy)`;
+      
+      const response = await fetch('/api/queries', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: duplicateName,
+          query: query.query,
+          description: query.description || '',
+          folder: query.folder || '',
+          connectionId: query.connection_id || connectionId || null,
+        }),
+      });
+
+      if (response.ok) {
+        await loadQueries();
+      } else {
+        const error = await response.json();
+        alert(error.error || 'Failed to duplicate query');
+      }
+    } catch (error) {
+      console.error('Failed to duplicate query:', error);
+      alert('Failed to duplicate query');
+    }
+  };
+
   const resetForm = () => {
     setFormData({
       name: '',
@@ -208,6 +237,13 @@ export default function SavedQueries({
                           title="Edit Query"
                         >
                           <Edit className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDuplicate(query)}
+                          className="p-1 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded transition-colors"
+                          title="Duplicate Query"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => handleDelete(query.id)}
