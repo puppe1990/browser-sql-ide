@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { PanelLeftClose, PanelLeftOpen, Columns, GitCompare, X, RefreshCw, Play } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen, Columns, GitCompare, X, RefreshCw, Play, Loader2 } from 'lucide-react';
 import ConnectionManager from '@/components/ConnectionManager';
 import TabbedQueryEditor from '@/components/TabbedQueryEditor';
 import DataVisualization from '@/components/DataVisualization';
@@ -53,6 +53,7 @@ export default function Home() {
   const [showCompareModal, setShowCompareModal] = useState(false);
   const [showCompareFieldsModal, setShowCompareFieldsModal] = useState(false);
   const [isReExecuting, setIsReExecuting] = useState(false);
+  const [isExecutingActiveTabs, setIsExecutingActiveTabs] = useState(false);
   const [savedQueries, setSavedQueries] = useState<{query1?: string, query2?: string}>({});
   const [activeQuery1, setActiveQuery1] = useState<string>('');
   const [activeQuery2, setActiveQuery2] = useState<string>('');
@@ -322,6 +323,7 @@ export default function Home() {
       return;
     }
 
+    setIsExecutingActiveTabs(true);
     setIsLoadingResult1(true);
     setIsLoadingResult2(true);
 
@@ -363,6 +365,8 @@ export default function Home() {
       setIsLoadingResult1(false);
       setIsLoadingResult2(false);
       alert(`Failed to execute queries: ${error.message || 'Unknown error'}`);
+    } finally {
+      setIsExecutingActiveTabs(false);
     }
   };
 
@@ -817,11 +821,21 @@ export default function Home() {
                   </p>
                   <button
                     onClick={handleExecuteActiveTabs}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center gap-2"
+                    disabled={isExecutingActiveTabs}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     title="Execute queries from active tabs"
                   >
-                    <Play className="w-4 h-4" />
-                    Execute Active Tab Queries
+                    {isExecutingActiveTabs ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Executing...
+                      </>
+                    ) : (
+                      <>
+                        <Play className="w-4 h-4" />
+                        Execute Active Tab Queries
+                      </>
+                    )}
                   </button>
                 </div>
               </div>

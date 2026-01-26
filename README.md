@@ -2,6 +2,8 @@
 
 A comprehensive web-based SQL IDE for database management that allows users to connect to multiple database types, starting with PostgreSQL. The IDE features an intuitive user interface for managing multiple connections, executing complex SQL queries, and visualizing data results.
 
+![Browser SQL IDE Interface](./print.png)
+
 ## Features
 
 - **Multi-Database Support**: Currently supports PostgreSQL, with architecture ready for MySQL, SQLite, and MSSQL
