@@ -23,6 +23,8 @@ interface QueryEditorProps {
   onQueryResult?: (result: any, query?: string) => void;
   onQueryChange?: (query: string) => void;
   onConnectionChange?: (connectionId: number) => void;
+  onQueryStart?: () => void; // Callback when query execution starts
+  onQueryError?: () => void; // Callback when query execution fails
 }
 
 const STORAGE_KEY = 'browser-sql-ide-query';
@@ -34,6 +36,8 @@ export default function QueryEditor({
   onQueryResult,
   onQueryChange,
   onConnectionChange,
+  onQueryStart,
+  onQueryError,
 }: QueryEditorProps) {
   const [connections, setConnections] = useState<Connection[]>([]);
   const [selectedConnectionId, setSelectedConnectionId] = useState<number | undefined>(connectionId);
@@ -391,6 +395,11 @@ export default function QueryEditor({
     setErrorLine(null);
     setResult(null);
 
+    // Notify parent that query execution started
+    if (onQueryStart) {
+      onQueryStart();
+    }
+
     // Clear previous error decoration
     if (editorRef.current && errorDecorationRef.current) {
       editorRef.current.deltaDecorations([errorDecorationRef.current], []);
@@ -426,6 +435,10 @@ export default function QueryEditor({
         if (lineNum) {
           setErrorLine(lineNum);
         }
+        // Notify parent about error
+        if (onQueryError) {
+          onQueryError();
+        }
       }
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to execute query';
@@ -434,6 +447,10 @@ export default function QueryEditor({
       const lineNum = findErrorLine(errorMessage, queryValue);
       if (lineNum) {
         setErrorLine(lineNum);
+      }
+      // Notify parent about error
+      if (onQueryError) {
+        onQueryError();
       }
     } finally {
       setIsExecuting(false);

@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { PanelLeftClose, PanelLeftOpen, Columns, GitCompare, X } from 'lucide-react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { PanelLeftClose, PanelLeftOpen, Columns, GitCompare, X, RefreshCw, Play } from 'lucide-react';
 import ConnectionManager from '@/components/ConnectionManager';
 import TabbedQueryEditor from '@/components/TabbedQueryEditor';
 import DataVisualization from '@/components/DataVisualization';
@@ -52,11 +52,22 @@ export default function Home() {
   const [compareFields, setCompareFields] = useState<string[]>([]);
   const [showCompareModal, setShowCompareModal] = useState(false);
   const [showCompareFieldsModal, setShowCompareFieldsModal] = useState(false);
+  const [isReExecuting, setIsReExecuting] = useState(false);
+  const [savedQueries, setSavedQueries] = useState<{query1?: string, query2?: string}>({});
+  const [activeQuery1, setActiveQuery1] = useState<string>('');
+  const [activeQuery2, setActiveQuery2] = useState<string>('');
+  const [activeConnectionId1, setActiveConnectionId1] = useState<number | undefined>(undefined);
+  const [activeConnectionId2, setActiveConnectionId2] = useState<number | undefined>(undefined);
+  const [isLoadingResult1, setIsLoadingResult1] = useState(false);
+  const [isLoadingResult2, setIsLoadingResult2] = useState(false);
   const [queryResultsHeight, setQueryResultsHeight] = useState<number>(400); // Default height in pixels
   const [savedQueriesHeight, setSavedQueriesHeight] = useState<number>(320); // Default height in pixels
   const [isResizing, setIsResizing] = useState(false);
   const [isResizingSavedQueries, setIsResizingSavedQueries] = useState(false);
   const [isResizingSplit, setIsResizingSplit] = useState(false);
+  const editor1Ref = useRef<{ addQueryToTab: (query: string) => void } | null>(null);
+  const editor2Ref = useRef<{ addQueryToTab: (query: string) => void } | null>(null);
+  const singleEditorRef = useRef<{ addQueryToTab: (query: string) => void } | null>(null);
 
   // Load sidebar state and heights from localStorage on mount
   useEffect(() => {
@@ -245,14 +256,210 @@ export default function Home() {
   const handleQueryResult = (result: QueryResult, query?: string, isSecondEditor = false) => {
     if (isSecondEditor) {
       setQueryResult2({ ...result, query });
+      setIsLoadingResult2(false);
+      if (query) {
+        setSavedQueries(prev => ({ ...prev, query2: query }));
+      }
     } else {
       setQueryResult({ ...result, query });
+      setIsLoadingResult1(false);
+      if (query) {
+        setSavedQueries(prev => ({ ...prev, query1: query }));
+      }
     }
-    // Disable compare mode when new results come in
-    if (compareMode) {
+    // Only disable compare mode when new results come in if not re-executing
+    if (compareMode && !isReExecuting) {
       setCompareMode(false);
       setCompareKey('');
       setCompareFields([]);
+    }
+  };
+
+
+  // Execute queries from active tabs in split screen
+  const handleExecuteActiveTabs = async () => {
+    // Get queries from active tabs of each editor
+    const query1 = activeQuery1?.trim();
+    const query2 = activeQuery2?.trim();
+
+    if (!query1 || !query2) {
+      alert('Please write queries in both editors before executing');
+      return;
+    }
+
+    // Get connection IDs from each editor, fallback to selectedConnection or first connection
+    let connectionId1 = activeConnectionId1;
+    let connectionId2 = activeConnectionId2;
+
+    // If no connection selected in editors, try to get from global selectedConnection
+    if (!connectionId1 || !connectionId2) {
+      if (selectedConnection) {
+        if (!connectionId1) connectionId1 = selectedConnection.id;
+        if (!connectionId2) connectionId2 = selectedConnection.id;
+      } else {
+        // Try to get first available connection
+        try {
+          const response = await fetch('/api/connections');
+          const data = await response.json();
+          const connections = data.connections || [];
+          if (connections.length > 0) {
+            const firstConnectionId = connections[0].id;
+            if (!connectionId1) connectionId1 = firstConnectionId;
+            if (!connectionId2) connectionId2 = firstConnectionId;
+          } else {
+            alert('Please select a connection in the editors or add a connection first');
+            return;
+          }
+        } catch (error) {
+          alert('Failed to load connections');
+          return;
+        }
+      }
+    }
+
+    if (!connectionId1 || !connectionId2) {
+      alert('Please select a connection in both editors');
+      return;
+    }
+
+    setIsLoadingResult1(true);
+    setIsLoadingResult2(true);
+
+    try {
+      // Execute both queries in parallel with their respective connections
+      const promises = [
+        { query: query1, connectionId: connectionId1 },
+        { query: query2, connectionId: connectionId2 }
+      ].map(async ({ query, connectionId }) => {
+        const processedQuery = processQuery(query);
+        const response = await fetch('/api/query/execute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            connectionId,
+            query: processedQuery,
+          }),
+        });
+
+        const data = await response.json();
+        if (data.success) {
+          return { ...data.result, query: processedQuery };
+        } else {
+          throw new Error(data.error || 'Query execution failed');
+        }
+      });
+
+      const executedResults = await Promise.all(promises);
+      
+      // Update results
+      setQueryResult(executedResults[0]);
+      setQueryResult2(executedResults[1]);
+      setIsLoadingResult1(false);
+      setIsLoadingResult2(false);
+      
+      // Save queries
+      setSavedQueries({ query1: executedResults[0].query, query2: executedResults[1].query });
+    } catch (error: any) {
+      setIsLoadingResult1(false);
+      setIsLoadingResult2(false);
+      alert(`Failed to execute queries: ${error.message || 'Unknown error'}`);
+    }
+  };
+
+  // Re-execute both queries with same filters
+  const handleReExecuteCompare = async () => {
+    if (!selectedConnection) {
+      alert('Please select a connection first');
+      return;
+    }
+
+    // Try to get queries from multiple sources in order of preference
+    let query1 = queryResult?.query || savedQueries.query1;
+    let query2 = queryResult2?.query || savedQueries.query2;
+
+    // If queries are still not found, try to get from tabs in localStorage
+    if (!query1 || !query2) {
+      try {
+        const savedTabs = localStorage.getItem('browser-sql-ide-tabs');
+        if (savedTabs) {
+          const tabs = JSON.parse(savedTabs);
+          if (tabs.length > 0) {
+            if (!query1 && tabs[0]?.query) {
+              query1 = tabs[0].query;
+            }
+            if (!query2) {
+              // In split screen, try to find the second tab
+              if (tabs.length > 1 && tabs[1]?.query) {
+                query2 = tabs[1].query;
+              } else if (tabs[0]?.query) {
+                // Fallback: use first tab if only one exists
+                query2 = tabs[0].query;
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Failed to get queries from tabs:', e);
+      }
+    }
+
+    if (!query1 || !query2) {
+      alert('Could not find queries to re-execute. Please execute both queries first in the split screen editors.');
+      return;
+    }
+
+    setIsReExecuting(true);
+    setIsLoadingResult1(true);
+    setIsLoadingResult2(true);
+    
+    // Store current filters to restore them after re-execution
+    const savedCompareKey = compareKey;
+    const savedCompareFields = [...compareFields];
+    const savedCompareMode = compareMode;
+
+    try {
+      // Execute both queries in parallel
+      const promises = [query1, query2].map(async (query) => {
+        const processedQuery = processQuery(query);
+        const response = await fetch('/api/query/execute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            connectionId: selectedConnection.id,
+            query: processedQuery,
+          }),
+        });
+
+        const data = await response.json();
+        if (data.success) {
+          return { ...data.result, query: processedQuery };
+        } else {
+          throw new Error(data.error || 'Query execution failed');
+        }
+      });
+
+      const executedResults = await Promise.all(promises);
+      
+      // Restore compare mode and filters BEFORE updating results
+      // This ensures they are preserved
+      if (savedCompareMode) {
+        setCompareMode(true);
+        setCompareKey(savedCompareKey);
+        setCompareFields(savedCompareFields);
+      }
+      
+      // Update results directly without going through handleQueryResult
+      // to avoid disabling compare mode
+      setQueryResult(executedResults[0]);
+      setQueryResult2(executedResults[1]);
+      setIsLoadingResult1(false);
+      setIsLoadingResult2(false);
+    } catch (error: any) {
+      setIsLoadingResult1(false);
+      setIsLoadingResult2(false);
+      alert(`Failed to execute query: ${error.message || 'Unknown error'}`);
+    } finally {
+      setIsReExecuting(false);
     }
   };
 
@@ -355,9 +562,17 @@ export default function Home() {
   };
 
   const handleQuerySelect = (query: string) => {
-    // Add query to a new tab using the global function exposed by TabbedQueryEditor
-    if (typeof window !== 'undefined' && (window as any).addQueryToTab) {
-      (window as any).addQueryToTab(query);
+    // Add query to the active editor based on split screen mode
+    if (splitScreen) {
+      // In split screen, add to editor1 by default (or could be made configurable)
+      if (editor1Ref.current) {
+        editor1Ref.current.addQueryToTab(query);
+      }
+    } else {
+      // In single mode, add to the single editor
+      if (singleEditorRef.current) {
+        singleEditorRef.current.addQueryToTab(query);
+      }
     }
   };
 
@@ -448,23 +663,25 @@ export default function Home() {
           )}
           
           {/* Split Screen Toggle Button */}
-          <button
-            onClick={() => {
-              setSplitScreen(!splitScreen);
-              if (!splitScreen) {
-                setCompareMode(false);
-                setCompareKey('');
-              }
-            }}
-            className={`absolute right-2 top-2 z-10 p-2 rounded transition-colors shadow-sm ${
-              splitScreen
-                ? 'bg-blue-600 text-white hover:bg-blue-700'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-            title={splitScreen ? 'Disable Split Screen' : 'Enable Split Screen'}
-          >
-            <Columns className="w-4 h-4" />
-          </button>
+          <div className="absolute right-2 top-2 z-50 flex items-center gap-2">
+            <button
+              onClick={() => {
+                setSplitScreen(!splitScreen);
+                if (!splitScreen) {
+                  setCompareMode(false);
+                  setCompareKey('');
+                }
+              }}
+              className={`p-2 rounded transition-colors shadow-sm ${
+                splitScreen
+                  ? 'bg-blue-600 text-white hover:bg-blue-700'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 bg-white dark:bg-slate-900'
+              }`}
+              title={splitScreen ? 'Disable Split Screen' : 'Enable Split Screen'}
+            >
+              <Columns className="w-4 h-4" />
+            </button>
+          </div>
 
           {/* Compare Button - Only visible in split screen */}
           {splitScreen && queryResult && queryResult2 && (
@@ -508,9 +725,15 @@ export default function Home() {
               >
                 <TabbedQueryEditor
                   connectionId={selectedConnection?.id}
+                  editorId="editor1"
                   onQuerySave={handleQuerySave}
                   onQueryResult={(result, query) => handleQueryResult(result, query, false)}
                   onQuerySelect={handleQuerySelect}
+                  onActiveQueryChange={setActiveQuery1}
+                  onConnectionChange={setActiveConnectionId1}
+                  onQueryStart={() => setIsLoadingResult1(true)}
+                  onQueryError={() => setIsLoadingResult1(false)}
+                  editorRef={editor1Ref}
                 />
               </div>
 
@@ -532,9 +755,15 @@ export default function Home() {
               >
                 <TabbedQueryEditor
                   connectionId={selectedConnection?.id}
+                  editorId="editor2"
                   onQuerySave={handleQuerySave}
                   onQueryResult={(result, query) => handleQueryResult(result, query, true)}
                   onQuerySelect={handleQuerySelect}
+                  onActiveQueryChange={setActiveQuery2}
+                  onConnectionChange={setActiveConnectionId2}
+                  onQueryStart={() => setIsLoadingResult2(true)}
+                  onQueryError={() => setIsLoadingResult2(false)}
+                  editorRef={editor2Ref}
                 />
               </div>
             </div>
@@ -556,12 +785,15 @@ export default function Home() {
                 onQuerySave={handleQuerySave}
                 onQueryResult={handleQueryResult}
                 onQuerySelect={handleQuerySelect}
+                onQueryStart={() => setIsLoadingResult1(true)}
+                onQueryError={() => setIsLoadingResult1(false)}
+                editorRef={singleEditorRef}
               />
             </div>
           )}
 
           {/* Resizer for Query Results */}
-          {(queryResult || queryResult2) && (
+          {(queryResult || queryResult2 || isLoadingResult1 || isLoadingResult2) && (
             <div
               onMouseDown={(e) => {
                 e.preventDefault();
@@ -576,7 +808,24 @@ export default function Home() {
 
           {/* Query Results */}
           {splitScreen ? (
-            compareMode && comparedResults ? (
+            !queryResult && !queryResult2 ? (
+              // No results - show execute button
+              <div className="flex flex-col items-center justify-center" style={{ height: `${queryResultsHeight}px`, minHeight: '200px', flexShrink: 0 }}>
+                <div className="text-center p-8">
+                  <p className="text-slate-600 dark:text-slate-400 mb-4">
+                    No queries executed yet. Execute queries from both editors to see results.
+                  </p>
+                  <button
+                    onClick={handleExecuteActiveTabs}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center gap-2"
+                    title="Execute queries from active tabs"
+                  >
+                    <Play className="w-4 h-4" />
+                    Execute Active Tab Queries
+                  </button>
+                </div>
+              </div>
+            ) : compareMode && comparedResults ? (
               // Compare Mode Results
               <div className="flex flex-col overflow-auto" style={{ height: `${queryResultsHeight}px`, minHeight: '200px', flexShrink: 0 }}>
                 <div className="px-4 py-2 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900">
@@ -592,6 +841,15 @@ export default function Home() {
                       )}
                     </div>
                     <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleReExecuteCompare}
+                        disabled={isReExecuting}
+                        className="px-2 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded transition-colors flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Re-execute both queries with same filters"
+                      >
+                        <RefreshCw className={`w-3 h-3 ${isReExecuting ? 'animate-spin' : ''}`} />
+                        {isReExecuting ? 'Executing...' : 'Re-execute'}
+                      </button>
                       <button
                         onClick={() => setShowCompareFieldsModal(true)}
                         className="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
@@ -717,31 +975,49 @@ export default function Home() {
             ) : (
               // Split Screen Results (Normal Mode)
               <div className="flex flex-row" style={{ height: `${queryResultsHeight}px`, minHeight: '200px', flexShrink: 0 }}>
-                {queryResult && (
+                {(queryResult || isLoadingResult1) && (
                   <div 
                     className="overflow-hidden border-r border-slate-200 dark:border-slate-800"
                     style={{ width: `${splitScreenWidth}%` }}
                   >
-                    <DataVisualization 
-                      result={queryResult} 
-                      connectionId={selectedConnection?.id}
-                      query={queryResult.query}
-                    />
+                    {queryResult ? (
+                      <DataVisualization 
+                        result={queryResult} 
+                        connectionId={selectedConnection?.id}
+                        query={queryResult.query}
+                        isLoading={isLoadingResult1}
+                      />
+                    ) : (
+                      <DataVisualization 
+                        result={{ columns: [], rows: [], rowCount: 0, executionTime: 0 }}
+                        connectionId={selectedConnection?.id}
+                        isLoading={isLoadingResult1}
+                      />
+                    )}
                   </div>
                 )}
-                {queryResult2 && (
+                {(queryResult2 || isLoadingResult2) && (
                   <div 
                     className="overflow-hidden"
-                    style={{ width: queryResult ? `${100 - splitScreenWidth}%` : '100%' }}
+                    style={{ width: (queryResult || isLoadingResult1) ? `${100 - splitScreenWidth}%` : '100%' }}
                   >
-                    <DataVisualization 
-                      result={queryResult2} 
-                      connectionId={selectedConnection?.id}
-                      query={queryResult2.query}
-                    />
+                    {queryResult2 ? (
+                      <DataVisualization 
+                        result={queryResult2} 
+                        connectionId={selectedConnection?.id}
+                        query={queryResult2.query}
+                        isLoading={isLoadingResult2}
+                      />
+                    ) : (
+                      <DataVisualization 
+                        result={{ columns: [], rows: [], rowCount: 0, executionTime: 0 }}
+                        connectionId={selectedConnection?.id}
+                        isLoading={isLoadingResult2}
+                      />
+                    )}
                   </div>
                 )}
-                {!queryResult && !queryResult2 && (
+                {!queryResult && !queryResult2 && !isLoadingResult1 && !isLoadingResult2 && (
                   <div className="flex-1 flex items-center justify-center text-slate-500 dark:text-slate-400 text-sm">
                     Execute queries to see results
                   </div>
@@ -750,7 +1026,7 @@ export default function Home() {
             )
           ) : (
             // Single Result
-            queryResult && (
+            (queryResult || isLoadingResult1) && (
               <div 
                 className="overflow-hidden"
                 style={{ 
@@ -759,11 +1035,20 @@ export default function Home() {
                   flexShrink: 0
                 }}
               >
-                <DataVisualization 
-                  result={queryResult} 
-                  connectionId={selectedConnection?.id}
-                  query={queryResult.query}
-                />
+                {queryResult ? (
+                  <DataVisualization 
+                    result={queryResult} 
+                    connectionId={selectedConnection?.id}
+                    query={queryResult.query}
+                    isLoading={isLoadingResult1}
+                  />
+                ) : (
+                  <DataVisualization 
+                    result={{ columns: [], rows: [], rowCount: 0, executionTime: 0 }}
+                    connectionId={selectedConnection?.id}
+                    isLoading={isLoadingResult1}
+                  />
+                )}
               </div>
             )
           )}

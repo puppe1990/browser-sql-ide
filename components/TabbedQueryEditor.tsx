@@ -17,16 +17,42 @@ interface TabbedQueryEditorProps {
   onQuerySave?: (query: string) => void;
   onQueryResult?: (result: any, query?: string) => void;
   onQuerySelect?: (query: string) => void;
+  editorId?: string; // Unique ID for split screen editors
+  onActiveQueryChange?: (query: string) => void; // Callback when active query changes
+  onConnectionChange?: (connectionId: number) => void; // Callback when connection changes
+  onQueryStart?: () => void; // Callback when query execution starts
+  onQueryError?: () => void; // Callback when query execution fails
+  editorRef?: React.MutableRefObject<{ addQueryToTab: (query: string) => void } | null>; // Ref to expose methods
 }
 
 const STORAGE_KEY = 'browser-sql-ide-tabs';
 const STORAGE_ACTIVE_TAB_KEY = 'browser-sql-ide-active-tab';
+
+// Get storage keys based on editor ID for split screen support
+const getStorageKeys = (editorId?: string) => {
+  if (editorId) {
+    return {
+      tabs: `browser-sql-ide-tabs-${editorId}`,
+      activeTab: `browser-sql-ide-active-tab-${editorId}`,
+    };
+  }
+  return {
+    tabs: STORAGE_KEY,
+    activeTab: STORAGE_ACTIVE_TAB_KEY,
+  };
+};
 
 export default function TabbedQueryEditor({
   connectionId,
   onQuerySave,
   onQueryResult,
   onQuerySelect,
+  editorId,
+  onActiveQueryChange,
+  onConnectionChange,
+  onQueryStart,
+  onQueryError,
+  editorRef,
 }: TabbedQueryEditorProps) {
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
@@ -49,8 +75,9 @@ export default function TabbedQueryEditor({
   // Load tabs from localStorage on mount
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const savedTabs = localStorage.getItem(STORAGE_KEY);
-      const savedActiveTab = localStorage.getItem(STORAGE_ACTIVE_TAB_KEY);
+      const storageKeys = getStorageKeys(editorId);
+      const savedTabs = localStorage.getItem(storageKeys.tabs);
+      const savedActiveTab = localStorage.getItem(storageKeys.activeTab);
       
       if (savedTabs) {
         try {
@@ -79,10 +106,10 @@ export default function TabbedQueryEditor({
   // Save active tab to localStorage when it changes
   useEffect(() => {
     if (activeTabId) {
-      localStorage.setItem(STORAGE_ACTIVE_TAB_KEY, activeTabId);
+      const storageKeys = getStorageKeys(editorId);
+      localStorage.setItem(storageKeys.activeTab, activeTabId);
     }
-  }, [activeTabId]);
-
+  }, [activeTabId, editorId]);
 
   const closeTab = useCallback((tabId: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -123,12 +150,13 @@ export default function TabbedQueryEditor({
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       if (tabs.length > 0) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(tabs));
+        const storageKeys = getStorageKeys(editorId);
+        localStorage.setItem(storageKeys.tabs, JSON.stringify(tabs));
       }
     }, 500);
 
     return () => clearTimeout(timeoutId);
-  }, [tabs]);
+  }, [tabs, editorId]);
 
   const updateTabResult = useCallback((tabId: string, result: any, error?: string) => {
     setTabs((prev) =>
@@ -140,13 +168,13 @@ export default function TabbedQueryEditor({
 
   const activeTab = tabs.find((tab) => tab.id === activeTabId);
 
-  // Expose method to add query from outside (e.g., from SavedQueries)
+  // Notify parent when active query changes
   useEffect(() => {
-    if (onQuerySelect) {
-      // This will be called when a saved query is selected
-      // We'll handle it through a custom event or prop
+    if (activeTab && onActiveQueryChange) {
+      onActiveQueryChange(activeTab.query);
     }
-  }, [onQuerySelect]);
+  }, [activeTab, onActiveQueryChange]);
+
 
   const handleQueryResult = (result: any, query?: string) => {
     if (activeTabId) {
@@ -177,13 +205,19 @@ export default function TabbedQueryEditor({
     });
   }, []);
 
-  // Expose addQueryToNewTab via window or context if needed
+  // Expose addQueryToNewTab via ref if provided
   useEffect(() => {
-    (window as any).addQueryToTab = addQueryToNewTab;
+    if (editorRef && 'current' in editorRef) {
+      editorRef.current = {
+        addQueryToTab: addQueryToNewTab,
+      };
+    }
     return () => {
-      delete (window as any).addQueryToTab;
+      if (editorRef && 'current' in editorRef) {
+        editorRef.current = null;
+      }
     };
-  }, [addQueryToNewTab]);
+  }, [addQueryToNewTab, editorRef]);
 
   if (!activeTab) {
     return null;
@@ -192,38 +226,36 @@ export default function TabbedQueryEditor({
   return (
     <div className="flex flex-col h-full bg-white dark:bg-slate-900 overflow-hidden">
       {/* Tabs Bar */}
-      <div className="flex items-center border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 overflow-x-auto">
-        <div className="flex items-center min-w-0 flex-1">
-          {tabs.map((tab) => (
-            <div
-              key={tab.id}
-              onClick={() => setActiveTabId(tab.id)}
-              className={`
-                flex items-center gap-2 px-4 py-2 cursor-pointer border-r border-slate-200 dark:border-slate-800
-                transition-colors min-w-0 max-w-xs
-                ${
-                  tab.id === activeTabId
-                    ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 border-b-2 border-b-blue-600 dark:border-b-blue-400'
-                    : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400'
-                }
-              `}
-            >
-              <span className="truncate text-sm font-medium">{tab.name}</span>
-              {tabs.length > 1 && (
-                <button
-                  onClick={(e) => closeTab(tab.id, e)}
-                  className="ml-1 p-0.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors flex-shrink-0"
-                  title="Close tab"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
+      <div className="flex items-center border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 w-full overflow-x-auto scrollbar-hide">
+        {tabs.map((tab) => (
+          <div
+            key={tab.id}
+            onClick={() => setActiveTabId(tab.id)}
+            className={`
+              flex items-center gap-2 px-4 py-2 cursor-pointer border-r border-slate-200 dark:border-slate-800
+              transition-colors min-w-0 max-w-xs flex-shrink-0
+              ${
+                tab.id === activeTabId
+                  ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 border-b-2 border-b-blue-600 dark:border-b-blue-400'
+                  : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400'
+              }
+            `}
+          >
+            <span className="truncate text-sm font-medium">{tab.name}</span>
+            {tabs.length > 1 && (
+              <button
+                onClick={(e) => closeTab(tab.id, e)}
+                className="ml-1 p-0.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors flex-shrink-0"
+                title="Close tab"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        ))}
         <button
           onClick={createNewTab}
-          className="px-3 py-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex-shrink-0"
+          className="px-3 py-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex-shrink-0 bg-slate-50 dark:bg-slate-900"
           title="New tab"
         >
           <Plus className="w-4 h-4" />
@@ -239,6 +271,9 @@ export default function TabbedQueryEditor({
           onQuerySave={onQuerySave}
           onQueryResult={handleQueryResult}
           onQueryChange={handleQueryChange}
+          onConnectionChange={onConnectionChange}
+          onQueryStart={onQueryStart}
+          onQueryError={onQueryError}
         />
       </div>
     </div>

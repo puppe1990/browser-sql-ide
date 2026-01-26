@@ -16,9 +16,10 @@ interface DataVisualizationProps {
   result: QueryResult;
   connectionId?: number;
   query?: string; // Original query for pagination
+  isLoading?: boolean; // Loading state
 }
 
-export default function DataVisualization({ result, connectionId, query }: DataVisualizationProps) {
+export default function DataVisualization({ result, connectionId, query, isLoading = false }: DataVisualizationProps) {
   const [expanded, setExpanded] = useState(false);
   const [allRows, setAllRows] = useState(result.rows);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -108,6 +109,27 @@ export default function DataVisualization({ result, connectionId, query }: DataV
     a.click();
     window.URL.revokeObjectURL(url);
   };
+
+  // Show loading spinner
+  if (isLoading) {
+    return (
+      <div className="h-full flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
+        <div className="flex justify-between items-center px-4 py-2.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900">
+          <div className="flex items-center gap-3">
+            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
+              Query Results
+            </h3>
+          </div>
+        </div>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3">
+            <Loader2 className="w-8 h-8 animate-spin text-blue-600 dark:text-blue-400" />
+            <p className="text-slate-500 dark:text-slate-400 text-sm">Loading results...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!result || !result.columns || result.columns.length === 0) {
     return (
