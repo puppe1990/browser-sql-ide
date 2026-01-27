@@ -747,6 +747,7 @@ export default function Home() {
               setCompareFields(compareFields.filter((f) => f !== field));
             }
           }}
+          onDeselectCompareFields={() => setCompareFields([])}
           onSkipCompareFields={() => {
             setShowCompareFieldsModal(false);
             setCompareFields([]);

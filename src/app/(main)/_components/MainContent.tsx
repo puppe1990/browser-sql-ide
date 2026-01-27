@@ -64,6 +64,7 @@ type MainContentProps = {
   onCancelCompareKey: () => void;
   onConfirmCompareKey: () => void;
   onToggleCompareField: (field: string, checked: boolean) => void;
+  onDeselectCompareFields: () => void;
   onSkipCompareFields: () => void;
   onDoneCompareFields: () => void;
   onCloseCompareFields: () => void;
@@ -122,6 +123,7 @@ export default function MainContent({
   onCancelCompareKey,
   onConfirmCompareKey,
   onToggleCompareField,
+  onDeselectCompareFields,
   onSkipCompareFields,
   onDoneCompareFields,
   onCloseCompareFields,
@@ -388,6 +390,7 @@ export default function MainContent({
         commonColumns={commonColumns}
         compareFields={compareFields}
         onToggleField={onToggleCompareField}
+        onDeselectAll={onDeselectCompareFields}
         onSkip={onSkipCompareFields}
         onDone={onDoneCompareFields}
         onClose={onCloseCompareFields}

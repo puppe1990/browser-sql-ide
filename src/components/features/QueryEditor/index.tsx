@@ -75,6 +75,7 @@ export default function QueryEditor({
   const monacoRef = useRef<typeof Monaco | null>(null);
   const isExecutingRef = useRef(false);
   const connectionIdRef = useRef(connectionId);
+  const isEditorFocusedRef = useRef(false);
   const handleExecuteRef = useRef<((queryToExecute?: string) => Promise<void>) | null>(null);
   const errorDecorationRef = useRef<string | null>(null);
 
@@ -132,7 +133,7 @@ export default function QueryEditor({
       if (isCtrlCmd && e.key === 'Enter' && editorRef.current) {
         const editor = editorRef.current;
         // Only execute if this editor has focus (prevents split-screen double-fire)
-        if (editor.hasTextFocus()) {
+        if (isEditorFocusedRef.current || editor.hasTextFocus()) {
           e.preventDefault();
           e.stopPropagation();
 
@@ -155,6 +156,7 @@ export default function QueryEditor({
   const handleEditorDidMount = (editor: Monaco.editor.IStandaloneCodeEditor, monaco: typeof Monaco) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
+    isEditorFocusedRef.current = editor.hasTextFocus();
     // Configure SQL language features
     editor.updateOptions({
       minimap: { enabled: false },
@@ -166,7 +168,7 @@ export default function QueryEditor({
     // Add keyboard shortcut: Ctrl+Enter (Windows/Linux) or Cmd+Return (Mac) to execute query
     // KeyMod.CtrlCmd automatically handles Ctrl on Windows/Linux and Cmd on Mac
     const executeCommand = () => {
-      if (!editor.hasTextFocus()) return;
+      if (!isEditorFocusedRef.current && !editor.hasTextFocus()) return;
 
       const queryToExecute = getQueryFromEditor(editor, query);
       
@@ -179,6 +181,23 @@ export default function QueryEditor({
     // Register the command with Monaco Editor
     // Using KeyMod.CtrlCmd which works for both Ctrl (Windows/Linux) and Cmd (Mac)
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, executeCommand);
+
+    const focusDisposable = editor.onDidFocusEditorText(() => {
+      isEditorFocusedRef.current = true;
+    });
+    const blurDisposable = editor.onDidBlurEditorText(() => {
+      isEditorFocusedRef.current = false;
+    });
+    editor.onDidDispose(() => {
+      focusDisposable.dispose();
+      blurDisposable.dispose();
+      if (editorRef.current === editor) {
+        editorRef.current = null;
+      }
+      if (monacoRef.current === monaco) {
+        monacoRef.current = null;
+      }
+    });
   };
 
   const closeDeleteConfirm = () => {

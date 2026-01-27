@@ -1,6 +1,7 @@
 'use client';
 
 import { X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 
 type CompareFieldsModalProps = {
   open: boolean;
@@ -8,6 +9,7 @@ type CompareFieldsModalProps = {
   commonColumns: string[];
   compareFields: string[];
   onToggleField: (field: string, checked: boolean) => void;
+  onDeselectAll: () => void;
   onSkip: () => void;
   onDone: () => void;
   onClose: () => void;
@@ -19,6 +21,7 @@ export default function CompareFieldsModal({
   commonColumns,
   compareFields,
   onToggleField,
+  onDeselectAll,
   onSkip,
   onDone,
   onClose,
@@ -26,6 +29,17 @@ export default function CompareFieldsModal({
   if (!open) return null;
 
   const selectableColumns = commonColumns.filter((col) => col !== compareKey);
+  const [searchValue, setSearchValue] = useState('');
+  useEffect(() => {
+    if (open) {
+      setSearchValue('');
+    }
+  }, [open]);
+  const filteredColumns = useMemo(() => {
+    if (!searchValue.trim()) return selectableColumns;
+    const normalized = searchValue.trim().toLowerCase();
+    return selectableColumns.filter((col) => col.toLowerCase().includes(normalized));
+  }, [searchValue, selectableColumns]);
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -45,8 +59,25 @@ export default function CompareFieldsModal({
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
             Choose fields to compare values (for matching keys):
           </label>
+          <div className="flex items-center gap-2 mb-2">
+            <input
+              type="text"
+              value={searchValue}
+              onChange={(e) => setSearchValue(e.target.value)}
+              placeholder="Search fields"
+              className="flex-1 rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <button
+              type="button"
+              onClick={onDeselectAll}
+              disabled={compareFields.length === 0}
+              className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Deselect all
+            </button>
+          </div>
           <div className="max-h-60 overflow-y-auto border border-slate-300 dark:border-slate-600 rounded-lg p-2 space-y-2">
-            {selectableColumns.map((col) => (
+            {filteredColumns.map((col) => (
               <label key={col} className="flex items-center gap-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 p-2 rounded">
                 <input
                   type="checkbox"
@@ -60,6 +91,11 @@ export default function CompareFieldsModal({
             {selectableColumns.length === 0 && (
               <p className="text-xs text-slate-500 dark:text-slate-400 p-2">
                 No other common columns available to compare.
+              </p>
+            )}
+            {selectableColumns.length > 0 && filteredColumns.length === 0 && (
+              <p className="text-xs text-slate-500 dark:text-slate-400 p-2">
+                No fields match your search.
               </p>
             )}
           </div>
