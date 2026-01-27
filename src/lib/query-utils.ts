@@ -166,11 +166,16 @@ type DeleteConfirmationInfo = {
   hasDeleteWithoutWhere: boolean;
   title: string;
   message: string;
+  tableNames: string[];
 };
 
 function stripSqlComments(query: string): string {
   const withoutBlock = query.replace(/\/\*[\s\S]*?\*\//g, ' ');
   return withoutBlock.replace(/--.*$/gm, ' ');
+}
+
+function normalizeTableName(rawName: string): string {
+  return rawName.replace(/^[`"'[]|[`"'\]]$/g, '');
 }
 
 export function getDeleteConfirmationInfo(query: string): DeleteConfirmationInfo {
@@ -180,6 +185,7 @@ export function getDeleteConfirmationInfo(query: string): DeleteConfirmationInfo
       hasDeleteWithoutWhere: false,
       title: '',
       message: '',
+      tableNames: [],
     };
   }
 
@@ -191,12 +197,17 @@ export function getDeleteConfirmationInfo(query: string): DeleteConfirmationInfo
 
   let hasDelete = false;
   let hasDeleteWithoutWhere = false;
+  const tableNames = new Set<string>();
 
   for (const statement of statements) {
     const upperStatement = statement.toUpperCase();
     const deleteIndex = upperStatement.search(/\bDELETE\b/);
     if (deleteIndex === -1) continue;
     hasDelete = true;
+    const tableMatch = statement.match(/\bDELETE\b[\s\S]*?\bFROM\b\s+([`"'[\]\w.]+)/i);
+    if (tableMatch?.[1]) {
+      tableNames.add(normalizeTableName(tableMatch[1]));
+    }
     const afterDelete = upperStatement.slice(deleteIndex);
     if (!/\bWHERE\b/.test(afterDelete)) {
       hasDeleteWithoutWhere = true;
@@ -209,6 +220,7 @@ export function getDeleteConfirmationInfo(query: string): DeleteConfirmationInfo
       hasDeleteWithoutWhere: false,
       title: '',
       message: '',
+      tableNames: [],
     };
   }
 
@@ -219,6 +231,7 @@ export function getDeleteConfirmationInfo(query: string): DeleteConfirmationInfo
       title: 'Danger: DELETE without WHERE',
       message:
         'This query includes a DELETE without a WHERE clause. That will remove ALL rows from the target table. This is destructive and cannot be undone. Are you absolutely sure?',
+      tableNames: Array.from(tableNames),
     };
   }
 
@@ -227,5 +240,6 @@ export function getDeleteConfirmationInfo(query: string): DeleteConfirmationInfo
     hasDeleteWithoutWhere: false,
     title: 'Confirm DELETE',
     message: 'You are about to run a DELETE statement. Are you sure you want to continue?',
+    tableNames: Array.from(tableNames),
   };
 }

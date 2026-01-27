@@ -215,12 +215,22 @@ export default function Home() {
     if (!deleteInfo.hasDelete) return false;
 
     const uniqueNames = connectionNames.filter(Boolean).filter((name, index, arr) => arr.indexOf(name) === index);
-    const message = uniqueNames.length > 0 ? (
+    const hasTables = deleteInfo.tableNames.length > 0;
+    const tableLabel = deleteInfo.tableNames.length > 1 ? 'Tables' : 'Table';
+    const tableText = deleteInfo.tableNames.join(', ');
+    const message = uniqueNames.length > 0 || hasTables ? (
       <div>
         <div>{deleteInfo.message}</div>
-        <div className="mt-2 text-sm font-medium text-white">
-          Connection{uniqueNames.length > 1 ? 's' : ''}: {uniqueNames.join(', ')}
-        </div>
+        {hasTables && (
+          <div className="mt-2 text-sm font-medium text-white">
+            {tableLabel}: {tableText}
+          </div>
+        )}
+        {uniqueNames.length > 0 && (
+          <div className={`${hasTables ? 'mt-1' : 'mt-2'} text-sm font-medium text-white`}>
+            Connection{uniqueNames.length > 1 ? 's' : ''}: {uniqueNames.join(', ')}
+          </div>
+        )}
       </div>
     ) : deleteInfo.message;
 

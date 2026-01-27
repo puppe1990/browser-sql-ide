@@ -265,10 +265,20 @@ export default function QueryEditor({
       const connectionName = resolvedConnectionId
         ? connections.find((connection) => connection.id === resolvedConnectionId)?.name
         : undefined;
-      const message = connectionName ? (
+      const hasTables = deleteInfo.tableNames.length > 0;
+      const tableLabel = deleteInfo.tableNames.length > 1 ? 'Tables' : 'Table';
+      const tableText = deleteInfo.tableNames.join(', ');
+      const message = connectionName || hasTables ? (
         <div>
           <div>{deleteInfo.message}</div>
-          <div className="mt-2 text-sm font-medium text-white">Connection: {connectionName}</div>
+          {hasTables && (
+            <div className="mt-2 text-sm font-medium text-white">{tableLabel}: {tableText}</div>
+          )}
+          {connectionName && (
+            <div className={`${hasTables ? 'mt-1' : 'mt-2'} text-sm font-medium text-white`}>
+              Connection: {connectionName}
+            </div>
+          )}
         </div>
       ) : deleteInfo.message;
 

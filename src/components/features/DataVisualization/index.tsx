@@ -35,6 +35,7 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
   const [isInserting, setIsInserting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [lastInsertedCount, setLastInsertedCount] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const currentOffset = useRef(result.rows.length);
@@ -218,6 +219,7 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
       }
 
       setIsInserting(true);
+      setLastInsertedCount(null);
       try {
         const response = await fetch('/api/query/execute', {
           method: 'POST',
@@ -231,8 +233,7 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
         const data = await response.json();
         if (data.success) {
           const insertedCount = data.result?.rowCount ?? rowsToInsert.length;
-          alert(`Inserted ${insertedCount} row${insertedCount === 1 ? '' : 's'} into ${trimmedTable}.`);
-          setShowInsertModal(false);
+          setLastInsertedCount(insertedCount);
         } else {
           alert(data.error || 'Insert failed');
         }
@@ -496,6 +497,7 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
         rowCount={allRows.length}
         insertCount={insertCount}
         insertCountIsExact={insertCountIsExact}
+        insertedCount={lastInsertedCount}
         isSubmitting={isInserting}
         onConnectionChange={setSelectedConnectionId}
         onTableNameChange={setInsertTableName}
