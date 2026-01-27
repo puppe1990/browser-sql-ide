@@ -110,6 +110,58 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
   const rowCountText = getRowCountText(totalCount, allRows.length);
   const canInsert = allRows.length > 0 && result.columns.length > 0;
 
+  const fetchAllRowsForInsert = useCallback(async () => {
+    if (!hasMore) return allRows;
+    if (!connectionId || !query) {
+      throw new Error('Query and source connection are required to fetch all rows.');
+    }
+
+    let rows = [...allRows];
+    let offset = rows.length;
+    let more = true;
+    let safetyCounter = 0;
+
+    while (more) {
+      const response = await fetch('/api/query/paginate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          connectionId,
+          query,
+          offset,
+          limit: 100,
+        }),
+      });
+
+      const data = await response.json();
+      if (!data.success || !data.result) {
+        throw new Error(data.error || 'Failed to fetch all rows');
+      }
+
+      const newRows = data.result.rows || [];
+      if (newRows.length === 0) {
+        break;
+      }
+
+      rows = [...rows, ...newRows];
+      offset += newRows.length;
+      more = data.result.hasMore ?? false;
+
+      safetyCounter += 1;
+      if (safetyCounter > 10000) {
+        throw new Error('Aborted fetching rows due to excessive pagination.');
+      }
+    }
+
+    if (rows.length !== allRows.length) {
+      setAllRows(rows);
+      setHasMore(false);
+      setTotalCount(rows.length);
+    }
+
+    return rows;
+  }, [allRows, connectionId, hasMore, query]);
+
   const handleInsertSubmit = useCallback(
     async (event: FormEvent) => {
       event.preventDefault();
@@ -130,7 +182,19 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
         return;
       }
 
-      const insertQuery = buildInsertQuery(result.columns, allRows, trimmedTable);
+      let rowsToInsert = allRows;
+
+      if (hasMore) {
+        try {
+          rowsToInsert = await fetchAllRowsForInsert();
+        } catch (error) {
+          console.error('Failed to load all rows:', error);
+          alert('Failed to load all rows before inserting');
+          return;
+        }
+      }
+
+      const insertQuery = buildInsertQuery(result.columns, rowsToInsert, trimmedTable);
       if (!insertQuery) {
         alert('Failed to build insert query');
         return;
@@ -149,7 +213,7 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
 
         const data = await response.json();
         if (data.success) {
-          const insertedCount = data.result?.rowCount ?? allRows.length;
+          const insertedCount = data.result?.rowCount ?? rowsToInsert.length;
           alert(`Inserted ${insertedCount} row${insertedCount === 1 ? '' : 's'} into ${trimmedTable}.`);
           setShowInsertModal(false);
         } else {
@@ -162,7 +226,7 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
         setIsInserting(false);
       }
     },
-    [selectedConnectionId, insertTableName, canInsert, result.columns, allRows]
+    [selectedConnectionId, insertTableName, canInsert, result.columns, allRows, hasMore, fetchAllRowsForInsert]
   );
 
   // Show loading spinner

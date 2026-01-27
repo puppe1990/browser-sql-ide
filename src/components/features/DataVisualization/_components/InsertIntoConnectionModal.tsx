@@ -89,7 +89,7 @@ export default function InsertIntoConnectionModal({
           </div>
 
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            Inserts {rowCount} loaded row{rowCount === 1 ? '' : 's'} into the selected connection.
+            Fetches all rows from the query and inserts them into the selected connection.
           </p>
 
           <div className="flex gap-2 justify-end">
