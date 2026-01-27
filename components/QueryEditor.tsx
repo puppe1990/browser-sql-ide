@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import Editor from '@monaco-editor/react';
 import { Play, Save, Loader2 } from 'lucide-react';
 import { processQuery, findStatementAtCursor } from '@/lib/query-utils';
@@ -42,30 +42,50 @@ export default function QueryEditor({
   const [connections, setConnections] = useState<Connection[]>([]);
   const [selectedConnectionId, setSelectedConnectionId] = useState<number | undefined>(connectionId);
 
+  const loadConnections = useCallback(async () => {
+    try {
+      const response = await fetch('/api/connections');
+      const data = await response.json();
+      const loadedConnections = data.connections || [];
+      setConnections(loadedConnections);
+
+      if (loadedConnections.length === 0) {
+        if (selectedConnectionId !== undefined) {
+          setSelectedConnectionId(undefined);
+        }
+        return;
+      }
+
+      const hasSelected = selectedConnectionId !== undefined &&
+        loadedConnections.some((conn: Connection) => conn.id === selectedConnectionId);
+      const nextConnectionId = hasSelected ? selectedConnectionId : loadedConnections[0].id;
+
+      if (nextConnectionId !== selectedConnectionId) {
+        setSelectedConnectionId(nextConnectionId);
+      }
+      if (onConnectionChange) {
+        onConnectionChange(nextConnectionId);
+      }
+    } catch (error) {
+      console.error('Failed to load connections:', error);
+    }
+  }, [onConnectionChange, selectedConnectionId]);
+
   // Load connections and auto-select first one
   useEffect(() => {
-    const loadConnections = async () => {
-      try {
-        const response = await fetch('/api/connections');
-        const data = await response.json();
-        const loadedConnections = data.connections || [];
-        setConnections(loadedConnections);
-        
-        // Auto-select first connection if no connection is selected
-        if (loadedConnections.length > 0 && !selectedConnectionId) {
-          const firstConnectionId = loadedConnections[0].id;
-          setSelectedConnectionId(firstConnectionId);
-          if (onConnectionChange) {
-            onConnectionChange(firstConnectionId);
-          }
-        }
-      } catch (error) {
-        console.error('Failed to load connections:', error);
-      }
-    };
-    
     loadConnections();
-  }, []);
+  }, [loadConnections]);
+
+  useEffect(() => {
+    const handleConnectionsUpdated = () => {
+      loadConnections();
+    };
+
+    window.addEventListener('connections-updated', handleConnectionsUpdated);
+    return () => {
+      window.removeEventListener('connections-updated', handleConnectionsUpdated);
+    };
+  }, [loadConnections]);
 
   // Update selected connection when connectionId prop changes
   useEffect(() => {

@@ -75,6 +75,7 @@ export default function ConnectionManager({
 
       if (response.ok) {
         await loadConnections();
+        window.dispatchEvent(new CustomEvent('connections-updated'));
         setShowModal(false);
         resetForm();
       } else {
@@ -97,6 +98,7 @@ export default function ConnectionManager({
 
       if (response.ok) {
         await loadConnections();
+        window.dispatchEvent(new CustomEvent('connections-updated'));
       } else {
         alert('Failed to delete connection');
       }
@@ -280,6 +282,7 @@ export default function ConnectionManager({
       }
 
       await loadConnections();
+      window.dispatchEvent(new CustomEvent('connections-updated'));
       setShowImportModal(false);
       setImportJson('');
 
