@@ -174,12 +174,13 @@ export default function TabbedQueryEditor({
 
 
   const handleQueryResult = (result: QueryResult, query?: string) => {
+    const resultWithSource = editorId ? { ...result, sourceEditorId: editorId } : result;
     if (activeTabId) {
-      updateTabResult(activeTabId, result);
+      updateTabResult(activeTabId, resultWithSource);
     }
     if (onQueryResult) {
       // Pass query along with result for pagination
-      onQueryResult(result, query);
+      onQueryResult(resultWithSource, query);
     }
   };
 

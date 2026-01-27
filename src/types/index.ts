@@ -9,6 +9,7 @@ export type QueryResult = {
   hasMore?: boolean;
   connectionId?: number;
   connectionName?: string;
+  sourceEditorId?: string;
 };
 
 export type FieldComparison = {

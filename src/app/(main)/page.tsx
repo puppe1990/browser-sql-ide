@@ -144,8 +144,14 @@ export default function Home() {
     setSelectedConnection(connection);
   };
 
-  const handleQueryResult = (result: QueryResult, query?: string, isSecondEditor = false) => {
-    if (isSecondEditor) {
+  const handleQueryResult = (result: QueryResult, query?: string, isSecondEditor?: boolean) => {
+    const resolvedIsSecond = typeof isSecondEditor === 'boolean'
+      ? isSecondEditor
+      : result.sourceEditorId === 'editor2'
+        ? true
+        : false;
+
+    if (resolvedIsSecond) {
       setQueryResult2({ ...result, query });
       setIsLoadingResult2(false);
       if (query) {

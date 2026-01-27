@@ -123,15 +123,13 @@ export default function QueryEditor({
       // Check if editor is focused (Monaco editor has focus)
       if (isCtrlCmd && e.key === 'Enter' && editorRef.current) {
         const editor = editorRef.current;
-        const editorElement = editor.getContainerDomNode();
-        
-        // Only execute if editor or its container has focus
-        if (document.activeElement === editorElement || editorElement.contains(document.activeElement)) {
+        // Only execute if this editor has focus (prevents split-screen double-fire)
+        if (editor.hasTextFocus()) {
           e.preventDefault();
           e.stopPropagation();
-          
+
           const queryToExecute = getQueryFromEditor(editor, query);
-          
+
           const currentConnectionId = selectedConnectionId || connectionIdRef.current;
           if (currentConnectionId && queryToExecute.trim() && !isExecutingRef.current && handleExecuteRef.current) {
             handleExecuteRef.current(queryToExecute);
@@ -160,6 +158,8 @@ export default function QueryEditor({
     // Add keyboard shortcut: Ctrl+Enter (Windows/Linux) or Cmd+Return (Mac) to execute query
     // KeyMod.CtrlCmd automatically handles Ctrl on Windows/Linux and Cmd on Mac
     const executeCommand = () => {
+      if (!editor.hasTextFocus()) return;
+
       const queryToExecute = getQueryFromEditor(editor, query);
       
       const currentConnectionId = selectedConnectionId || connectionIdRef.current;
