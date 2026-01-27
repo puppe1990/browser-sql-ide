@@ -125,12 +125,15 @@ export default function QueryEditor({
 
   // Add global keyboard shortcut listener as fallback
   useEffect(() => {
+    const isRunShortcut = (e: KeyboardEvent) =>
+      e.key === 'Enter' || e.code === 'Enter' || e.code === 'NumpadEnter';
+
     const handleKeyDown = (e: KeyboardEvent) => {
       const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
       const isCtrlCmd = isMac ? e.metaKey : e.ctrlKey;
       
       // Check if editor is focused (Monaco editor has focus)
-      if (isCtrlCmd && e.key === 'Enter' && editorRef.current) {
+      if (isCtrlCmd && isRunShortcut(e) && editorRef.current) {
         const editor = editorRef.current;
         // Only execute if this editor has focus (prevents split-screen double-fire)
         if (isEditorFocusedRef.current || editor.hasTextFocus()) {
@@ -147,9 +150,9 @@ export default function QueryEditor({
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown, { capture: true });
     return () => {
-      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keydown', handleKeyDown, { capture: true });
     };
   }, [selectedConnectionId, query]);
 
