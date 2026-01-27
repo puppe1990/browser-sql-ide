@@ -200,27 +200,27 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
         return;
       }
 
-      let rowsToInsert = allRows;
-
-      if (hasMore) {
-        try {
-          rowsToInsert = await fetchAllRowsForInsert();
-        } catch (error) {
-          console.error('Failed to load all rows:', error);
-          alert('Failed to load all rows before inserting');
-          return;
-        }
-      }
-
-      const insertQuery = buildInsertQuery(result.columns, rowsToInsert, trimmedTable);
-      if (!insertQuery) {
-        alert('Failed to build insert query');
-        return;
-      }
-
       setIsInserting(true);
       setLastInsertedCount(null);
       try {
+        let rowsToInsert = allRows;
+
+        if (hasMore) {
+          try {
+            rowsToInsert = await fetchAllRowsForInsert();
+          } catch (error) {
+            console.error('Failed to load all rows:', error);
+            alert('Failed to load all rows before inserting');
+            return;
+          }
+        }
+
+        const insertQuery = buildInsertQuery(result.columns, rowsToInsert, trimmedTable);
+        if (!insertQuery) {
+          alert('Failed to build insert query');
+          return;
+        }
+
         const response = await fetch('/api/query/execute', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
