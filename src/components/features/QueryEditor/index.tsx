@@ -1,23 +1,16 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
+import type { ChangeEvent } from 'react';
 import Editor from '@monaco-editor/react';
-import { Play, Save, Loader2 } from 'lucide-react';
-import { processQuery, findStatementAtCursor } from '@/lib/query-utils';
+import { processQuery } from '@/lib/query-utils';
 import { getErrorMessage } from '@/lib/utils';
 import type { QueryResult } from '@/types';
 import type * as Monaco from 'monaco-editor';
-
-interface Connection {
-  id: number;
-  name: string;
-  type: string;
-  host: string;
-  port: number;
-  database: string;
-  username: string;
-  ssl: boolean;
-}
+import EditorHeader from './_components/EditorHeader';
+import EditorFooter from './_components/EditorFooter';
+import type { Connection } from './types';
+import { findErrorLine, getQueryFromEditor } from './utils';
 
 interface QueryEditorProps {
   connectionId?: number;
@@ -98,7 +91,7 @@ export default function QueryEditor({
   }, [connectionId]);
 
   // Handle connection selection change
-  const handleConnectionChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+  const handleConnectionChange = (e: ChangeEvent<HTMLSelectElement>) => {
     const newConnectionId = parseInt(e.target.value, 10);
     setSelectedConnectionId(newConnectionId);
     if (onConnectionChange) {
@@ -152,69 +145,6 @@ export default function QueryEditor({
       setQuery(initialQuery);
     }
   }, [initialQuery, onQueryChange]);
-
-  // Function to find line number from error message
-  const findErrorLine = (errorMessage: string, queryText: string): number | null => {
-    // Try to extract line number from error message (common patterns)
-    const lineNumberMatch = errorMessage.match(/line\s+(\d+)|position\s+(\d+)|at\s+line\s+(\d+)/i);
-    if (lineNumberMatch) {
-      const lineNum = parseInt(lineNumberMatch[1] || lineNumberMatch[2] || lineNumberMatch[3], 10);
-      if (lineNum > 0) {
-        return lineNum;
-      }
-    }
-
-    // Try to find column name or table name in error and locate it in query
-    const lines = queryText.split('\n');
-    const errorLower = errorMessage.toLowerCase();
-    
-    // Common error patterns - extract column/table name
-    const columnMatch = errorMessage.match(/column\s+["']?(\w+)["']?/i);
-    const tableMatch = errorMessage.match(/table\s+["']?(\w+)["']?/i);
-    const relationMatch = errorMessage.match(/relation\s+["']?(\w+)["']?/i);
-    
-    const searchTerm = columnMatch?.[1] || tableMatch?.[1] || relationMatch?.[1];
-    
-    if (searchTerm) {
-      // Search for the term in query lines (prioritize WHERE clauses and lines with semicolons)
-      const searchTermLower = searchTerm.toLowerCase();
-      
-      // First, check lines with WHERE clause or semicolons (most likely to contain the error)
-      for (let i = lines.length - 1; i >= 0; i--) {
-        const line = lines[i];
-        const lineLower = line.toLowerCase();
-        const lineTrimmed = line.trim();
-        
-        // Check if line contains WHERE or ends with semicolon and contains the search term
-        if ((lineLower.includes('where') || lineTrimmed.endsWith(';')) && 
-            lineLower.includes(searchTermLower)) {
-          return i + 1; // Return 1-based line number
-        }
-      }
-      
-      // If not found, search all lines
-      for (let i = 0; i < lines.length; i++) {
-        const lineLower = lines[i].toLowerCase();
-        // Check if line contains the search term (as a whole word or column reference)
-        if (lineLower.includes(searchTermLower)) {
-          return i + 1; // Return 1-based line number
-        }
-      }
-    }
-
-    // If error mentions specific SQL keywords, try to find them
-    if (errorLower.includes('syntax error') || errorLower.includes('parse error')) {
-      // For syntax errors, check lines with semicolons or WHERE clauses
-      for (let i = lines.length - 1; i >= 0; i--) {
-        const line = lines[i].trim();
-        if (line.endsWith(';') || line.toLowerCase().startsWith('where')) {
-          return i + 1;
-        }
-      }
-    }
-
-    return null;
-  };
 
   // Highlight error line in editor
   useEffect(() => {
@@ -300,38 +230,7 @@ export default function QueryEditor({
           e.preventDefault();
           e.stopPropagation();
           
-          const selection = editor.getSelection();
-          let queryToExecute: string;
-          
-          // If there's a selection, use only the selected text
-          if (selection && !selection.isEmpty()) {
-            const model = editor.getModel();
-            if (model) {
-              queryToExecute = model.getValueInRange(selection);
-            } else {
-              queryToExecute = editor.getValue();
-            }
-          } else {
-            // No selection - find the complete statement at cursor position (DBeaver-style)
-            const model = editor.getModel();
-            if (model) {
-              const position = editor.getPosition();
-              if (position) {
-                const fullText = editor.getValue();
-                const lineNumber = position.lineNumber; // 1-based
-                
-                // Find the complete statement that contains the cursor line
-                // Delimiters: semicolon (;) or blank lines (Smart mode)
-                queryToExecute = findStatementAtCursor(fullText, lineNumber, true);
-              } else {
-                // No position, execute entire query
-                queryToExecute = editor.getValue();
-              }
-            } else {
-              // No model, execute entire query
-              queryToExecute = editor.getValue();
-            }
-          }
+          const queryToExecute = getQueryFromEditor(editor, query);
           
           const currentConnectionId = selectedConnectionId || connectionIdRef.current;
           if (currentConnectionId && queryToExecute.trim() && !isExecutingRef.current && handleExecuteRef.current) {
@@ -347,7 +246,7 @@ export default function QueryEditor({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [selectedConnectionId]);
+  }, [selectedConnectionId, query]);
 
   const handleEditorDidMount = (editor: Monaco.editor.IStandaloneCodeEditor, monaco: typeof Monaco) => {
     editorRef.current = editor;
@@ -363,38 +262,7 @@ export default function QueryEditor({
     // Add keyboard shortcut: Ctrl+Enter (Windows/Linux) or Cmd+Return (Mac) to execute query
     // KeyMod.CtrlCmd automatically handles Ctrl on Windows/Linux and Cmd on Mac
     const executeCommand = () => {
-      const selection = editor.getSelection();
-      let queryToExecute: string;
-      
-      // If there's a selection, use only the selected text
-      if (selection && !selection.isEmpty()) {
-        const model = editor.getModel();
-        if (model) {
-          queryToExecute = model.getValueInRange(selection);
-        } else {
-          queryToExecute = editor.getValue();
-        }
-      } else {
-        // No selection - find the complete statement at cursor position (DBeaver-style)
-        const model = editor.getModel();
-        if (model) {
-          const position = editor.getPosition();
-          if (position) {
-            const fullText = editor.getValue();
-            const lineNumber = position.lineNumber; // 1-based
-            
-            // Find the complete statement that contains the cursor line
-            // Delimiters: semicolon (;) or blank lines (Smart mode)
-            queryToExecute = findStatementAtCursor(fullText, lineNumber, true);
-          } else {
-            // No position, execute entire query
-            queryToExecute = editor.getValue();
-          }
-        } else {
-          // No model, execute entire query
-          queryToExecute = editor.getValue();
-        }
-      }
+      const queryToExecute = getQueryFromEditor(editor, query);
       
       const currentConnectionId = selectedConnectionId || connectionIdRef.current;
       if (currentConnectionId && queryToExecute.trim() && !isExecutingRef.current && handleExecuteRef.current) {
@@ -410,50 +278,7 @@ export default function QueryEditor({
   };
 
   const handleExecute = async (queryToExecute?: string) => {
-    let queryValue: string;
-    
-    // If queryToExecute is provided, use it
-    if (queryToExecute) {
-      queryValue = queryToExecute;
-    } else {
-      // Check if there's a selection in the editor
-      if (editorRef.current) {
-        const selection = editorRef.current.getSelection();
-        if (selection && !selection.isEmpty()) {
-          // Use selected text
-          const model = editorRef.current.getModel();
-          if (model) {
-            queryValue = model.getValueInRange(selection);
-          } else {
-            // Fallback to editor value if model is not available
-            queryValue = editorRef.current.getValue() || query;
-          }
-        } else {
-          // No selection - find the complete statement at cursor position (DBeaver-style)
-          const model = editorRef.current.getModel();
-          if (model) {
-            const position = editorRef.current.getPosition();
-            if (position) {
-              const fullText = editorRef.current.getValue() || query;
-              const lineNumber = position.lineNumber; // 1-based
-              
-              // Find the complete statement that contains the cursor line
-              // Delimiters: semicolon (;) or blank lines (Smart mode)
-              queryValue = findStatementAtCursor(fullText, lineNumber, true);
-            } else {
-              // No position, execute entire query
-              queryValue = editorRef.current.getValue() || query;
-            }
-          } else {
-            // No model, execute entire query
-            queryValue = editorRef.current.getValue() || query;
-          }
-        }
-      } else {
-        // Fallback to state if editor ref is not available
-        queryValue = query;
-      }
-    }
+    const queryValue = queryToExecute ?? getQueryFromEditor(editorRef.current, query);
     
     const connectionToUse = selectedConnectionId || connectionId;
     if (!connectionToUse) {
@@ -547,48 +372,16 @@ export default function QueryEditor({
 
   return (
     <div className="flex flex-col h-full bg-white dark:bg-slate-900 overflow-hidden">
-      <div className="flex justify-between items-center px-4 py-2.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900">
-        <div className="flex items-center gap-3">
-          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
-            Query Editor
-          </h3>
-          {connections.length > 0 && (
-            <select
-              value={selectedConnectionId || ''}
-              onChange={handleConnectionChange}
-              className="text-xs px-2 py-1 border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-            >
-              {connections.map((conn) => (
-                <option key={conn.id} value={conn.id}>
-                  {conn.name} ({conn.type})
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={handleSave}
-            disabled={!query.trim()}
-            className="px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
-          >
-            <Save className="w-3.5 h-3.5" />
-            Save
-          </button>
-          <button
-            onClick={() => handleExecute()}
-            disabled={isExecuting || !(selectedConnectionId || connectionId)}
-            className="px-3 py-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
-          >
-            {isExecuting ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <Play className="w-3.5 h-3.5" />
-            )}
-            Execute
-          </button>
-        </div>
-      </div>
+      <EditorHeader
+        connections={connections}
+        selectedConnectionId={selectedConnectionId}
+        isExecuting={isExecuting}
+        canExecute={Boolean(selectedConnectionId || connectionId)}
+        hasQuery={Boolean(query.trim())}
+        onConnectionChange={handleConnectionChange}
+        onSave={handleSave}
+        onExecute={() => handleExecute()}
+      />
 
       <div className="flex-1 min-h-0">
         <Editor
@@ -615,31 +408,7 @@ export default function QueryEditor({
         />
       </div>
 
-      {(error || result) && (
-        <div className="border-t border-slate-200 dark:border-slate-800 p-3 bg-slate-50 dark:bg-slate-900">
-          {error && (
-            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded p-2">
-              <p className="text-red-800 dark:text-red-200 text-xs font-semibold">Error:</p>
-              <p className="text-red-700 dark:text-red-300 text-xs mt-1">
-                {error}
-                {errorLine && (
-                  <span className="block mt-1 text-red-600 dark:text-red-400 font-medium">
-                    → Line {errorLine}
-                  </span>
-                )}
-              </p>
-            </div>
-          )}
-          {result && (
-            <div className="flex justify-between items-center text-xs text-slate-600 dark:text-slate-400">
-              <span>
-                {result.rowCount} row{result.rowCount !== 1 ? 's' : ''} returned
-              </span>
-              <span>Execution time: {result.executionTime}ms</span>
-            </div>
-          )}
-        </div>
-      )}
+      <EditorFooter error={error} errorLine={errorLine} result={result} />
     </div>
   );
 }

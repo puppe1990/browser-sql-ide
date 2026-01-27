@@ -1,34 +1,17 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { PanelLeftClose, PanelLeftOpen, Columns, GitCompare, X, RefreshCw, Play, Loader2, Download } from 'lucide-react';
-import ConnectionManager from '@/components/features/ConnectionManager';
-import TabbedQueryEditor from '@/components/features/TabbedQueryEditor';
-import DataVisualization from '@/components/features/DataVisualization';
-import SavedQueries from '@/components/features/SavedQueries';
+import Sidebar from './_components/Sidebar';
 import { processQuery } from '@/lib/query-utils';
 import { getErrorMessage } from '@/lib/utils';
-import type { ComparisonResult, QueryResult, RowData } from '@/types';
+import type { ComparisonResult, RowData } from '@/types';
+import type { Connection, QueryResultWithMeta } from './types';
+import MainContent from './_components/MainContent';
 
 declare global {
   interface Window {
     addQueryToTab?: (query: string) => void;
   }
-}
-
-interface Connection {
-  id: number;
-  name: string;
-  type: string;
-  host: string;
-  port: number;
-  database: string;
-  username: string;
-  ssl: boolean;
-}
-
-interface QueryResultWithMeta extends QueryResult {
-  query?: string; // Original query for pagination
 }
 
 const STORAGE_KEYS = {
@@ -778,624 +761,110 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       <div className="flex h-screen overflow-hidden">
-        {/* Sidebar - Connections */}
-        <aside
-          className={`${
-            sidebarOpen ? 'w-80' : 'w-0'
-          } transition-all duration-300 ease-in-out border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col overflow-hidden`}
-        >
-          {sidebarOpen && (
-            <>
-              <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-                <div>
-                  <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">
-                    Browser SQL IDE
-                  </h1>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                    Database management
-                  </p>
-                </div>
-                <button
-                  onClick={() => setSidebarOpen(false)}
-                  className="p-1.5 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors"
-                  title="Close sidebar"
-                >
-                  <PanelLeftClose className="w-4 h-4" />
-                </button>
-              </div>
-              <div className="flex-1 overflow-auto">
-                <ConnectionManager
-                  onConnectionSelect={handleConnectionSelect}
-                  selectedConnectionId={selectedConnection?.id}
-                />
-              </div>
-            </>
-          )}
-        </aside>
+        <Sidebar
+          open={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+          selectedConnectionId={selectedConnection?.id}
+          onConnectionSelect={handleConnectionSelect}
+        />
 
-        {/* Main Content Area */}
-        <main className="flex-1 flex flex-col overflow-hidden relative">
-          {!sidebarOpen && (
-            <button
-              onClick={() => setSidebarOpen(true)}
-              className="absolute left-2 top-2 z-10 p-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors shadow-sm"
-              title="Open sidebar"
-            >
-              <PanelLeftOpen className="w-4 h-4" />
-            </button>
-          )}
-          
-          {/* Split Screen Toggle Button */}
-          <div className="absolute right-2 top-2 z-50 flex items-center gap-2">
-            <button
-              onClick={() => {
-                setSplitScreen(!splitScreen);
-                if (!splitScreen) {
-                  setCompareMode(false);
-                  setCompareKey('');
-                }
-              }}
-              className={`p-2 rounded transition-colors shadow-sm ${
-                splitScreen
-                  ? 'bg-blue-600 text-white hover:bg-blue-700'
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 bg-white dark:bg-slate-900'
-              }`}
-              title={splitScreen ? 'Disable Split Screen' : 'Enable Split Screen'}
-            >
-              <Columns className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Compare Button - Only visible in split screen */}
-          {splitScreen && queryResult && queryResult2 && (
-            <button
-            onClick={() => {
-              if (!compareMode) {
-                setShowCompareModal(true);
-              } else {
-                setCompareMode(false);
-                setCompareKey('');
-                setCompareFields([]);
-              }
-            }}
-              className={`absolute right-12 top-2 z-10 p-2 rounded transition-colors shadow-sm ${
-                compareMode
-                  ? 'bg-green-600 text-white hover:bg-green-700'
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-              }`}
-              title={compareMode ? 'Disable Compare Mode' : 'Compare Results'}
-            >
-              <GitCompare className="w-4 h-4" />
-            </button>
-          )}
-
-          {/* Query Editor(s) */}
-          {splitScreen ? (
-            // Split Screen Mode
-            <div 
-              className="flex flex-row border-b border-slate-200 dark:border-slate-800"
-              style={{ 
-                height: (queryResult || queryResult2)
-                  ? `calc(100% - ${queryResultsHeight}px - 4px)` 
-                  : `calc(100% - ${savedQueriesHeight}px - 4px)`,
-                minHeight: '200px'
-              }}
-            >
-              {/* First Editor */}
-              <div 
-                className="flex flex-col border-r border-slate-200 dark:border-slate-800"
-                style={{ width: `${splitScreenWidth}%` }}
-              >
-                <TabbedQueryEditor
-                  connectionId={selectedConnection?.id}
-                  editorId="editor1"
-                  onQuerySave={handleQuerySave}
-                  onQueryResult={(result, query) => handleQueryResult(result, query, false)}
-                  onActiveQueryChange={setActiveQuery1}
-                  onConnectionChange={setActiveConnectionId1}
-                  onQueryStart={() => setIsLoadingResult1(true)}
-                  onQueryError={() => setIsLoadingResult1(false)}
-                  editorRef={editor1Ref}
-                />
-              </div>
-
-              {/* Split Resizer */}
-              <div
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  setIsResizingSplit(true);
-                }}
-                className="w-1 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 cursor-col-resize transition-colors relative group flex-shrink-0"
-              >
-                <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-1 bg-transparent group-hover:bg-blue-500 dark:group-hover:bg-blue-400 transition-colors" />
-              </div>
-
-              {/* Second Editor */}
-              <div 
-                className="flex flex-col"
-                style={{ width: `${100 - splitScreenWidth}%` }}
-              >
-                <TabbedQueryEditor
-                  connectionId={selectedConnection?.id}
-                  editorId="editor2"
-                  onQuerySave={handleQuerySave}
-                  onQueryResult={(result, query) => handleQueryResult(result, query, true)}
-                  onActiveQueryChange={setActiveQuery2}
-                  onConnectionChange={setActiveConnectionId2}
-                  onQueryStart={() => setIsLoadingResult2(true)}
-                  onQueryError={() => setIsLoadingResult2(false)}
-                  editorRef={editor2Ref}
-                />
-              </div>
-            </div>
-          ) : (
-            // Single Editor Mode
-            <div 
-              className="flex flex-col border-b border-slate-200 dark:border-slate-800"
-              style={{ 
-                height: queryResult 
-                  ? `calc(100% - ${queryResultsHeight}px - 4px)` 
-                  : !queryResult 
-                    ? `calc(100% - ${savedQueriesHeight}px - 4px)`
-                    : '100%',
-                minHeight: (queryResult || !queryResult) ? '200px' : '0'
-              }}
-            >
-              <TabbedQueryEditor
-                connectionId={selectedConnection?.id}
-                onQuerySave={handleQuerySave}
-                onQueryResult={handleQueryResult}
-                onQueryStart={() => setIsLoadingResult1(true)}
-                onQueryError={() => setIsLoadingResult1(false)}
-                editorRef={singleEditorRef}
-              />
-            </div>
-          )}
-
-          {/* Resizer for Query Results */}
-          {(queryResult || queryResult2 || isLoadingResult1 || isLoadingResult2) && (
-            <div
-              onMouseDown={(e) => {
-                e.preventDefault();
-                setIsResizing(true);
-              }}
-              className="h-1 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 cursor-row-resize transition-colors relative group"
-              style={{ flexShrink: 0 }}
-            >
-              <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-1 bg-transparent group-hover:bg-blue-500 dark:group-hover:bg-blue-400 transition-colors" />
-            </div>
-          )}
-
-          {/* Query Results */}
-          {splitScreen ? (
-            !queryResult && !queryResult2 ? (
-              // No results - show execute button
-              <div className="flex flex-col items-center justify-center" style={{ height: `${queryResultsHeight}px`, minHeight: '200px', flexShrink: 0 }}>
-                <div className="text-center p-8">
-                  <p className="text-slate-600 dark:text-slate-400 mb-4">
-                    No queries executed yet. Execute queries from both editors to see results.
-                  </p>
-                  <button
-                    onClick={handleExecuteActiveTabs}
-                    disabled={isExecutingActiveTabs}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Execute queries from active tabs"
-                  >
-                    {isExecutingActiveTabs ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Executing...
-                      </>
-                    ) : (
-                      <>
-                        <Play className="w-4 h-4" />
-                        Execute Active Tab Queries
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            ) : compareMode && comparedResults ? (
-              // Compare Mode Results
-              <div className="flex flex-col overflow-auto" style={{ height: `${queryResultsHeight}px`, minHeight: '200px', flexShrink: 0 }}>
-                <div className="px-4 py-2 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                        Comparison Results (Key: {compareKey})
-                      </h3>
-                      {compareFields.length > 0 && (
-                        <span className="text-xs text-slate-500 dark:text-slate-400">
-                          Comparing: {compareFields.join(', ')}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={handleExportCompare}
-                        className="px-2 py-1 text-xs bg-purple-600 hover:bg-purple-700 text-white rounded transition-colors flex items-center gap-1"
-                        title="Export comparison results to CSV"
-                      >
-                        <Download className="w-3 h-3" />
-                        Export
-                      </button>
-                      <button
-                        onClick={handleReExecuteCompare}
-                        disabled={isReExecuting}
-                        className="px-2 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded transition-colors flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Re-execute both queries with same filters"
-                      >
-                        <RefreshCw className={`w-3 h-3 ${isReExecuting ? 'animate-spin' : ''}`} />
-                        {isReExecuting ? 'Executing...' : 'Re-execute'}
-                      </button>
-                      <button
-                        onClick={() => setShowCompareFieldsModal(true)}
-                        className="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
-                        title="Select fields to compare"
-                      >
-                        {compareFields.length > 0 ? 'Change Fields' : 'Select Fields'}
-                      </button>
-                      <div className="flex gap-4 text-xs">
-                        <span className="flex items-center gap-1">
-                          <span className="w-3 h-3 bg-green-500 rounded"></span>
-                          Match ({comparedResults.filter((r) => r.status === 'match').length})
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <span className="w-3 h-3 bg-blue-500 rounded"></span>
-                          Left Only ({comparedResults.filter((r) => r.status === 'left-only').length})
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <span className="w-3 h-3 bg-orange-500 rounded"></span>
-                          Right Only ({comparedResults.filter((r) => r.status === 'right-only').length})
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex-1 overflow-auto">
-                  <table className="w-full border-collapse">
-                    <thead className="sticky top-0 z-20">
-                      <tr className="bg-slate-50 dark:bg-slate-800">
-                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">Key Value</th>
-                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">Status</th>
-                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">Left Count</th>
-                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">Right Count</th>
-                        {compareFields.length > 0 && compareFields.map((field) => (
-                          <th key={field} className="px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
-                            {field}
-                            <br />
-                            <span className="text-xs font-normal">(Left vs Right)</span>
-                          </th>
-                        ))}
-                        {compareFields.length === 0 && (
-                          <>
-                            <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">Left Data</th>
-                            <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">Right Data</th>
-                          </>
-                        )}
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white dark:bg-slate-900 divide-y divide-slate-200 dark:divide-slate-800">
-                      {comparedResults.map((item, idx: number) => (
-                        <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                          <td className="px-3 py-2 text-xs text-slate-900 dark:text-slate-100 font-mono">{item.key || '(null)'}</td>
-                          <td className="px-3 py-2 text-xs">
-                            <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                              item.status === 'match' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
-                              item.status === 'left-only' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' :
-                              'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400'
-                            }`}>
-                              {item.status === 'match' ? 'Match' : item.status === 'left-only' ? 'Left Only' : 'Right Only'}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2 text-xs text-slate-900 dark:text-slate-100">{item.leftRows.length}</td>
-                          <td className="px-3 py-2 text-xs text-slate-900 dark:text-slate-100">{item.rightRows.length}</td>
-                          {compareFields.length > 0 ? (
-                            compareFields.map((field) => {
-                              const comparison = item.fieldComparisons?.[field];
-                              if (!comparison) {
-                                return (
-                                  <td key={field} className="px-3 py-2 text-xs text-slate-400 dark:text-slate-500">
-                                    N/A
-                                  </td>
-                                );
-                              }
-                              const isMatch = comparison.match;
-                              return (
-                                <td key={field} className="px-3 py-2 text-xs">
-                                  <div className={`p-2 rounded ${isMatch ? 'bg-green-50 dark:bg-green-900/20' : 'bg-red-50 dark:bg-red-900/20'}`}>
-                                    <div className="flex items-center gap-2 mb-1">
-                                      <span className={`w-2 h-2 rounded-full ${isMatch ? 'bg-green-500' : 'bg-red-500'}`}></span>
-                                      <span className={`font-medium ${isMatch ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
-                                        {isMatch ? 'Match' : 'Different'}
-                                      </span>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-2 text-xs">
-                                      <div>
-                                        <span className="text-slate-500 dark:text-slate-400">Left:</span>
-                                        <div className="font-mono mt-0.5 break-all">
-                                          {String(comparison.left ?? 'NULL')}
-                                        </div>
-                                      </div>
-                                      <div>
-                                        <span className="text-slate-500 dark:text-slate-400">Right:</span>
-                                        <div className="font-mono mt-0.5 break-all">
-                                          {String(comparison.right ?? 'NULL')}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </td>
-                              );
-                            })
-                          ) : (
-                            <>
-                              <td className="px-3 py-2 text-xs text-slate-900 dark:text-slate-100">
-                                <pre className="max-w-xs truncate font-mono text-xs bg-slate-100 dark:bg-slate-800 p-1 rounded">
-                                  {JSON.stringify(item.leftRows[0] || {}, null, 2).substring(0, 100)}
-                                  {JSON.stringify(item.leftRows[0] || {}, null, 2).length > 100 ? '...' : ''}
-                                </pre>
-                              </td>
-                              <td className="px-3 py-2 text-xs text-slate-900 dark:text-slate-100">
-                                <pre className="max-w-xs truncate font-mono text-xs bg-slate-100 dark:bg-slate-800 p-1 rounded">
-                                  {JSON.stringify(item.rightRows[0] || {}, null, 2).substring(0, 100)}
-                                  {JSON.stringify(item.rightRows[0] || {}, null, 2).length > 100 ? '...' : ''}
-                                </pre>
-                              </td>
-                            </>
-                          )}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            ) : (
-              // Split Screen Results (Normal Mode)
-              <div className="flex flex-row" style={{ height: `${queryResultsHeight}px`, minHeight: '200px', flexShrink: 0 }}>
-                {(queryResult || isLoadingResult1) && (
-                  <div 
-                    className="overflow-hidden border-r border-slate-200 dark:border-slate-800"
-                    style={{ width: `${splitScreenWidth}%` }}
-                  >
-                    {queryResult ? (
-                      <DataVisualization 
-                        result={queryResult} 
-                        connectionId={selectedConnection?.id}
-                        query={queryResult.query}
-                        isLoading={isLoadingResult1}
-                      />
-                    ) : (
-                      <DataVisualization 
-                        result={{ columns: [], rows: [], rowCount: 0, executionTime: 0 }}
-                        connectionId={selectedConnection?.id}
-                        isLoading={isLoadingResult1}
-                      />
-                    )}
-                  </div>
-                )}
-                {(queryResult2 || isLoadingResult2) && (
-                  <div 
-                    className="overflow-hidden"
-                    style={{ width: (queryResult || isLoadingResult1) ? `${100 - splitScreenWidth}%` : '100%' }}
-                  >
-                    {queryResult2 ? (
-                      <DataVisualization 
-                        result={queryResult2} 
-                        connectionId={selectedConnection?.id}
-                        query={queryResult2.query}
-                        isLoading={isLoadingResult2}
-                      />
-                    ) : (
-                      <DataVisualization 
-                        result={{ columns: [], rows: [], rowCount: 0, executionTime: 0 }}
-                        connectionId={selectedConnection?.id}
-                        isLoading={isLoadingResult2}
-                      />
-                    )}
-                  </div>
-                )}
-                {!queryResult && !queryResult2 && !isLoadingResult1 && !isLoadingResult2 && (
-                  <div className="flex-1 flex items-center justify-center text-slate-500 dark:text-slate-400 text-sm">
-                    Execute queries to see results
-                  </div>
-                )}
-              </div>
-            )
-          ) : (
-            // Single Result
-            (queryResult || isLoadingResult1) && (
-              <div 
-                className="overflow-hidden"
-                style={{ 
-                  height: `${queryResultsHeight}px`,
-                  minHeight: '200px',
-                  flexShrink: 0
-                }}
-              >
-                {queryResult ? (
-                  <DataVisualization 
-                    result={queryResult} 
-                    connectionId={selectedConnection?.id}
-                    query={queryResult.query}
-                    isLoading={isLoadingResult1}
-                  />
-                ) : (
-                  <DataVisualization 
-                    result={{ columns: [], rows: [], rowCount: 0, executionTime: 0 }}
-                    connectionId={selectedConnection?.id}
-                    isLoading={isLoadingResult1}
-                  />
-                )}
-              </div>
-            )
-          )}
-
-          {/* Resizer for Saved Queries */}
-          {!queryResult && (
-            <div
-              onMouseDown={(e) => {
-                e.preventDefault();
-                setIsResizingSavedQueries(true);
-              }}
-              className="h-1 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 cursor-row-resize transition-colors relative group border-t border-slate-200 dark:border-slate-800"
-              style={{ flexShrink: 0 }}
-            >
-              <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-1 bg-transparent group-hover:bg-blue-500 dark:group-hover:bg-blue-400 transition-colors" />
-            </div>
-          )}
-
-          {/* Compare Key Modal */}
-          {showCompareModal && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-              <div className="bg-white dark:bg-slate-800 rounded-lg p-6 w-full max-w-md">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-xl font-bold text-slate-900 dark:text-white">
-                    Select Compare Key
-                  </h3>
-                  <button
-                    onClick={() => setShowCompareModal(false)}
-                    className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                    Choose a column to compare by:
-                  </label>
-                  <select
-                    value={compareKey}
-                    onChange={(e) => setCompareKey(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
-                  >
-                    <option value="">-- Select Column --</option>
-                    {commonColumns.map((col) => (
-                      <option key={col} value={col}>
-                        {col}
-                      </option>
-                    ))}
-                  </select>
-                  {commonColumns.length === 0 && (
-                    <p className="text-xs text-red-500 mt-2">
-                      No common columns found between the two results.
-                    </p>
-                  )}
-                </div>
-                <div className="flex gap-2 justify-end">
-                  <button
-                    onClick={() => {
-                      setShowCompareModal(false);
-                      setCompareKey('');
-                    }}
-                    className="px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (compareKey) {
-                        setCompareMode(true);
-                        setShowCompareModal(false);
-                        // Auto-open fields modal after selecting key
-                        setTimeout(() => setShowCompareFieldsModal(true), 100);
-                      }
-                    }}
-                    disabled={!compareKey}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Compare
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Compare Fields Modal */}
-          {showCompareFieldsModal && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-              <div className="bg-white dark:bg-slate-800 rounded-lg p-6 w-full max-w-md">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-xl font-bold text-slate-900 dark:text-white">
-                    Select Fields to Compare
-                  </h3>
-                  <button
-                    onClick={() => setShowCompareFieldsModal(false)}
-                    className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                    Choose fields to compare values (for matching keys):
-                  </label>
-                  <div className="max-h-60 overflow-y-auto border border-slate-300 dark:border-slate-600 rounded-lg p-2 space-y-2">
-                    {commonColumns.filter(col => col !== compareKey).map((col) => (
-                      <label key={col} className="flex items-center gap-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 p-2 rounded">
-                        <input
-                          type="checkbox"
-                          checked={compareFields.includes(col)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setCompareFields([...compareFields, col]);
-                            } else {
-                              setCompareFields(compareFields.filter(f => f !== col));
-                            }
-                          }}
-                          className="rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500"
-                        />
-                        <span className="text-sm text-slate-700 dark:text-slate-300">{col}</span>
-                      </label>
-                    ))}
-                    {commonColumns.filter(col => col !== compareKey).length === 0 && (
-                      <p className="text-xs text-slate-500 dark:text-slate-400 p-2">
-                        No other common columns available to compare.
-                      </p>
-                    )}
-                  </div>
-                </div>
-                <div className="flex gap-2 justify-end">
-                  <button
-                    onClick={() => {
-                      setShowCompareFieldsModal(false);
-                      setCompareFields([]);
-                    }}
-                    className="px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-                  >
-                    Skip
-                  </button>
-                  <button
-                    onClick={() => {
-                      setShowCompareFieldsModal(false);
-                    }}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-                  >
-                    Done
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Saved Queries Panel */}
-          {!queryResult && !queryResult2 && (
-            <div 
-              className="overflow-hidden border-t border-slate-200 dark:border-slate-800"
-              style={{ 
-                height: `${savedQueriesHeight}px`,
-                minHeight: '150px',
-                flexShrink: 0
-              }}
-            >
-              <SavedQueries
-                connectionId={selectedConnection?.id}
-                onQuerySelect={handleQuerySelect}
-                onQueryExecute={handleQueryExecute}
-              />
-            </div>
-          )}
-        </main>
+        <MainContent
+          sidebarOpen={sidebarOpen}
+          onOpenSidebar={() => setSidebarOpen(true)}
+          splitScreen={splitScreen}
+          onToggleSplitScreen={() => {
+            setSplitScreen(!splitScreen);
+            if (!splitScreen) {
+              setCompareMode(false);
+              setCompareKey('');
+            }
+          }}
+          compareMode={compareMode}
+          canCompare={Boolean(splitScreen && queryResult && queryResult2)}
+          onToggleCompare={() => {
+            if (!compareMode) {
+              setShowCompareModal(true);
+            } else {
+              setCompareMode(false);
+              setCompareKey('');
+              setCompareFields([]);
+            }
+          }}
+          queryResult={queryResult}
+          queryResult2={queryResult2}
+          queryResultsHeight={queryResultsHeight}
+          savedQueriesHeight={savedQueriesHeight}
+          splitScreenWidth={splitScreenWidth}
+          isExecutingActiveTabs={isExecutingActiveTabs}
+          onExecuteActiveTabs={handleExecuteActiveTabs}
+          comparedResults={comparedResults}
+          compareKey={compareKey}
+          compareFields={compareFields}
+          isReExecuting={isReExecuting}
+          onExportCompare={handleExportCompare}
+          onReExecuteCompare={handleReExecuteCompare}
+          onOpenCompareFieldsModal={() => setShowCompareFieldsModal(true)}
+          isLoadingResult1={isLoadingResult1}
+          isLoadingResult2={isLoadingResult2}
+          onStartResizeResults={(e) => {
+            e.preventDefault();
+            setIsResizing(true);
+          }}
+          onStartResizeSavedQueries={(e) => {
+            e.preventDefault();
+            setIsResizingSavedQueries(true);
+          }}
+          onStartResizeSplit={(e) => {
+            e.preventDefault();
+            setIsResizingSplit(true);
+          }}
+          selectedConnectionId={selectedConnection?.id}
+          onQuerySave={handleQuerySave}
+          onQueryResult1={(result, query) => handleQueryResult(result, query, false)}
+          onQueryResult2={(result, query) => handleQueryResult(result, query, true)}
+          onQueryResultSingle={handleQueryResult}
+          onActiveQueryChange1={setActiveQuery1}
+          onActiveQueryChange2={setActiveQuery2}
+          onConnectionChange1={setActiveConnectionId1}
+          onConnectionChange2={setActiveConnectionId2}
+          onQueryStart1={() => setIsLoadingResult1(true)}
+          onQueryStart2={() => setIsLoadingResult2(true)}
+          onQueryError1={() => setIsLoadingResult1(false)}
+          onQueryError2={() => setIsLoadingResult2(false)}
+          editorRef1={editor1Ref}
+          editorRef2={editor2Ref}
+          editorRefSingle={singleEditorRef}
+          onQuerySelect={handleQuerySelect}
+          onQueryExecute={handleQueryExecute}
+          showCompareModal={showCompareModal}
+          showCompareFieldsModal={showCompareFieldsModal}
+          commonColumns={commonColumns}
+          onCompareKeyChange={setCompareKey}
+          onCancelCompareKey={() => {
+            setShowCompareModal(false);
+            setCompareKey('');
+          }}
+          onConfirmCompareKey={() => {
+            if (compareKey) {
+              setCompareMode(true);
+              setShowCompareModal(false);
+              setTimeout(() => setShowCompareFieldsModal(true), 100);
+            }
+          }}
+          onToggleCompareField={(field, checked) => {
+            if (checked) {
+              setCompareFields([...compareFields, field]);
+            } else {
+              setCompareFields(compareFields.filter((f) => f !== field));
+            }
+          }}
+          onSkipCompareFields={() => {
+            setShowCompareFieldsModal(false);
+            setCompareFields([]);
+          }}
+          onDoneCompareFields={() => setShowCompareFieldsModal(false)}
+          onCloseCompareFields={() => setShowCompareFieldsModal(false)}
+        />
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 import { Pool, PoolClient } from 'pg';
 import type { QueryResult, RowData } from '@/types';
 import { getErrorMessage } from '@/lib/utils';
+import { addPaginationToQuery, getTotalCount } from '@/lib/database-connectors/pagination';
 
 export type DatabaseType = 'postgresql' | 'mysql' | 'sqlite' | 'mssql';
 
@@ -60,86 +61,6 @@ class DatabaseConnector {
     return pool;
   }
 
-  /**
-   * Remove existing LIMIT and OFFSET clauses from a query
-   */
-  private removePaginationFromQuery(query: string): string {
-    // Remove OFFSET ... first (it comes after LIMIT)
-    let cleaned = query.replace(/\s+OFFSET\s+\d+/gi, '');
-    // Remove LIMIT ...
-    cleaned = cleaned.replace(/\s+LIMIT\s+\d+/gi, '');
-    return cleaned.trim();
-  }
-
-  /**
-   * Add LIMIT and OFFSET to a SELECT query
-   * Removes any existing LIMIT/OFFSET first to ensure correct pagination
-   */
-  private addPaginationToQuery(query: string, offset: number, limit: number): string {
-    const trimmedQuery = query.trim();
-    if (!trimmedQuery) return query;
-
-    const upperQuery = trimmedQuery.toUpperCase();
-    
-    // Only process SELECT queries
-    if (!upperQuery.startsWith('SELECT')) {
-      return query;
-    }
-
-    // Remove any existing LIMIT/OFFSET
-    const queryWithoutPagination = this.removePaginationFromQuery(trimmedQuery);
-    
-    // Add new LIMIT and OFFSET
-    const hasSemicolon = queryWithoutPagination.endsWith(';');
-    const queryWithoutSemicolon = hasSemicolon 
-      ? queryWithoutPagination.slice(0, -1).trim() 
-      : queryWithoutPagination;
-    
-    let paginatedQuery = `${queryWithoutSemicolon} LIMIT ${limit}`;
-    if (offset > 0) {
-      paginatedQuery += ` OFFSET ${offset}`;
-    }
-    
-    return hasSemicolon ? `${paginatedQuery};` : paginatedQuery;
-  }
-
-  /**
-   * Get total count for a SELECT query (for pagination)
-   * Removes any existing LIMIT/OFFSET to get the true count
-   */
-  private async getTotalCount(
-    connection: DatabaseConnection,
-    query: string
-  ): Promise<number> {
-    const trimmedQuery = query.trim();
-    if (!trimmedQuery) return 0;
-
-    const upperQuery = trimmedQuery.toUpperCase();
-    if (!upperQuery.startsWith('SELECT')) {
-      return 0;
-    }
-
-    // Remove any existing LIMIT/OFFSET to get the true count
-    const queryWithoutPagination = this.removePaginationFromQuery(trimmedQuery);
-    
-    try {
-      const hasSemicolon = queryWithoutPagination.endsWith(';');
-      const queryWithoutSemicolon = hasSemicolon 
-        ? queryWithoutPagination.slice(0, -1).trim() 
-        : queryWithoutPagination;
-      const countQuery = `SELECT COUNT(*) as total FROM (${queryWithoutSemicolon}) as count_query`;
-      
-      const pool = await this.connect(connection);
-      const client: PoolClient = await pool.connect();
-      const result = await client.query(countQuery);
-      client.release();
-      return parseInt(result.rows[0]?.total || '0', 10);
-    } catch {
-      // If count query fails, return -1 to indicate unknown
-      return -1;
-    }
-  }
-
   async executeQuery(
     connection: DatabaseConnection,
     query: string,
@@ -160,10 +81,10 @@ class DatabaseConnector {
       const upperQuery = query.trim().toUpperCase();
       if (upperQuery.startsWith('SELECT') && limit !== undefined) {
         // Get total count before pagination
-        totalCount = await this.getTotalCount(connection, query);
+        totalCount = await getTotalCount(this.connect.bind(this), connection, query);
         
         // Apply pagination
-        queryToExecute = this.addPaginationToQuery(query, offset, limit);
+        queryToExecute = addPaginationToQuery(query, offset, limit);
         
         // Determine if there are more rows
         if (totalCount >= 0) {
