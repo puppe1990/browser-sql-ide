@@ -13,6 +13,7 @@ import {
   exportToCsv,
   exportToInsertStatements,
   getRowCountText,
+  parseInsertStatements,
 } from './utils';
 import { useConnections } from '@/components/features/QueryEditor/helpers';
 
@@ -32,6 +33,8 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
   const [showInsertModal, setShowInsertModal] = useState(false);
   const [insertTableName, setInsertTableName] = useState('');
   const [isInserting, setIsInserting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const currentOffset = useRef(result.rows.length);
   const { connections, selectedConnectionId, setSelectedConnectionId } = useConnections({});
@@ -273,6 +276,87 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
     window.URL.revokeObjectURL(url);
   }, [insertTableName, canInsert, allRows, hasMore, fetchAllRowsForInsert, result.columns]);
 
+  const handleImportInserts = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  const handleFileChange = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      // Reset input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+
+      if (!sourceConnectionId) {
+        alert('Por favor, selecione uma conexão primeiro');
+        return;
+      }
+
+      setIsImporting(true);
+      try {
+        const text = await file.text();
+        const statements = parseInsertStatements(text);
+
+        if (statements.length === 0) {
+          alert('Nenhum INSERT statement encontrado no arquivo');
+          setIsImporting(false);
+          return;
+        }
+
+        // Execute each INSERT statement
+        let successCount = 0;
+        let errorCount = 0;
+        const errors: string[] = [];
+
+        for (let i = 0; i < statements.length; i++) {
+          const statement = statements[i];
+          try {
+            const response = await fetch('/api/query/execute', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                connectionId: sourceConnectionId,
+                query: statement,
+              }),
+            });
+
+            const data = await response.json();
+            if (data.success) {
+              successCount++;
+            } else {
+              errorCount++;
+              errors.push(`Linha ${i + 1}: ${data.error || 'Erro desconhecido'}`);
+            }
+          } catch (error) {
+            errorCount++;
+            errors.push(`Linha ${i + 1}: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+          }
+        }
+
+        let message = `Importação concluída: ${successCount} INSERT${successCount !== 1 ? 's' : ''} executado${successCount !== 1 ? 's' : ''} com sucesso`;
+        if (errorCount > 0) {
+          message += `, ${errorCount} falha${errorCount !== 1 ? 's' : ''}`;
+          if (errors.length > 0) {
+            message += `\n\nErros:\n${errors.slice(0, 5).join('\n')}`;
+            if (errors.length > 5) {
+              message += `\n... e mais ${errors.length - 5} erro(s)`;
+            }
+          }
+        }
+        alert(message);
+      } catch (error) {
+        console.error('Failed to import INSERT statements:', error);
+        alert(`Erro ao importar arquivo: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+      } finally {
+        setIsImporting(false);
+      }
+    },
+    [sourceConnectionId]
+  );
+
   // Show loading spinner
   if (isLoading) {
     return (
@@ -310,6 +394,13 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
         expanded ? 'fixed inset-4 z-50' : ''
       }`}
     >
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".sql,.txt"
+        onChange={handleFileChange}
+        className="hidden"
+      />
       <ResultsHeader
         expanded={expanded}
         rowCountText={rowCountText}
@@ -318,9 +409,10 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
         onToggleExpand={() => setExpanded(!expanded)}
         onExportCsv={() => exportToCsv(result.columns, allRows)}
         onExportSql={() => exportToInsertStatements(result.columns, allRows, query)}
+        onImportInserts={handleImportInserts}
         onInsertToConnection={() => setShowInsertModal(true)}
         canInsert={canInsert}
-        isInserting={isInserting}
+        isInserting={isInserting || isImporting}
       />
 
       <div ref={scrollContainerRef} className="flex-1 overflow-auto relative">

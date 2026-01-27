@@ -1,6 +1,6 @@
 'use client';
 
-import { Database, Download, Maximize2, UploadCloud } from 'lucide-react';
+import { Database, Download, FileUp, Maximize2, UploadCloud } from 'lucide-react';
 import Tooltip from '@/components/ui/Tooltip';
 
 type ResultsHeaderProps = {
@@ -11,6 +11,7 @@ type ResultsHeaderProps = {
   onToggleExpand: () => void;
   onExportCsv: () => void;
   onExportSql: () => void;
+  onImportInserts: () => void;
   onInsertToConnection: () => void;
   canInsert: boolean;
   isInserting: boolean;
@@ -24,6 +25,7 @@ export default function ResultsHeader({
   onToggleExpand,
   onExportCsv,
   onExportSql,
+  onImportInserts,
   onInsertToConnection,
   canInsert,
   isInserting,
@@ -75,6 +77,14 @@ export default function ResultsHeader({
             className="p-1.5 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition-colors"
           >
             <Database className="w-3.5 h-3.5" />
+          </button>
+        </Tooltip>
+        <Tooltip text="Importar INSERT statements de arquivo">
+          <button
+            onClick={onImportInserts}
+            className="p-1.5 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition-colors"
+          >
+            <FileUp className="w-3.5 h-3.5" />
           </button>
         </Tooltip>
       </div>

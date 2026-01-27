@@ -120,3 +120,17 @@ export function getRowCountText(totalCount: number | undefined, currentRows: num
   const plural = (totalCount !== undefined && totalCount !== 1) || currentRows !== 1 ? 's' : '';
   return `${currentRows}${total} row${plural}`;
 }
+
+export function parseInsertStatements(sqlContent: string): string[] {
+  // Remove comments (-- and /* */)
+  let cleaned = sqlContent.replace(/--.*$/gm, '');
+  cleaned = cleaned.replace(/\/\*[\s\S]*?\*\//g, '');
+  
+  // Split by semicolon and filter out empty lines
+  const statements = cleaned
+    .split(';')
+    .map((stmt) => stmt.trim())
+    .filter((stmt) => stmt.length > 0 && stmt.toUpperCase().startsWith('INSERT'));
+  
+  return statements;
+}
