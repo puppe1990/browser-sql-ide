@@ -10,10 +10,13 @@ type InsertIntoConnectionModalProps = {
   selectedConnectionId?: number;
   tableName: string;
   rowCount: number;
+  insertCount?: number;
+  insertCountIsExact: boolean;
   isSubmitting: boolean;
   onConnectionChange: (connectionId: number) => void;
   onTableNameChange: (tableName: string) => void;
   onSubmit: (event: FormEvent) => void;
+  onExportInsert: () => void;
   onClose: () => void;
 };
 
@@ -23,10 +26,13 @@ export default function InsertIntoConnectionModal({
   selectedConnectionId,
   tableName,
   rowCount,
+  insertCount,
+  insertCountIsExact,
   isSubmitting,
   onConnectionChange,
   onTableNameChange,
   onSubmit,
+  onExportInsert,
   onClose,
 }: InsertIntoConnectionModalProps) {
   if (!open) return null;
@@ -83,13 +89,21 @@ export default function InsertIntoConnectionModal({
               required
               value={tableName}
               onChange={(event) => onTableNameChange(event.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-slate-50 dark:bg-slate-700 text-gray-900 dark:text-white cursor-not-allowed"
               placeholder="schema.table or table_name"
+              readOnly
+              disabled
             />
           </div>
 
           <p className="text-xs text-gray-500 dark:text-gray-400">
             Fetches all rows from the query and inserts them into the selected connection.
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Rows to insert:{' '}
+            {insertCountIsExact
+              ? insertCount ?? rowCount
+              : 'unknown (will fetch all rows before inserting)'}
           </p>
 
           <div className="flex gap-2 justify-end">
@@ -100,6 +114,14 @@ export default function InsertIntoConnectionModal({
               disabled={isSubmitting}
             >
               Cancel
+            </button>
+            <button
+              type="button"
+              onClick={onExportInsert}
+              disabled={!hasConnections || rowCount === 0 || isSubmitting}
+              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              Export INSERT
             </button>
             <button
               type="submit"

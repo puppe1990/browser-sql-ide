@@ -239,7 +239,7 @@ export async function executeQueries(
 
     const data = await response.json();
     if (data.success) {
-      return { ...data.result, query: processedQuery } as QueryResultWithMeta;
+      return { ...data.result, query: processedQuery, connectionId } as QueryResultWithMeta;
     }
 
     throw new Error(data.error || 'Query execution failed');

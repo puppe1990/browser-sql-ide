@@ -102,6 +102,7 @@ export function buildInsertQuery(
   return `INSERT INTO ${tableName} (${columns.join(', ')}) VALUES\n${values.join(',\n')};`;
 }
 
+
 export function formatCellValue(value: unknown) {
   if (value === null || value === undefined) {
     return { displayValue: 'NULL', cellClass: 'text-slate-400 dark:text-slate-500 italic' };

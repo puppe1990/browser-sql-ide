@@ -197,7 +197,7 @@ export async function executeQueryRequest(
 
   const data = await response.json();
   if (data.success) {
-    return data.result as QueryResult;
+    return { ...data.result, connectionId } as QueryResult;
   }
 
   throw new Error(data.error || 'Query execution failed');

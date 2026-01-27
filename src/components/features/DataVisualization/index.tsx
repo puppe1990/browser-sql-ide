@@ -41,6 +41,7 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
     if (!resolvedConnectionId) return undefined;
     return connections.find((connection) => connection.id === resolvedConnectionId)?.name;
   }, [connections, connectionId, result.connectionId, result.connectionName, selectedConnectionId]);
+  const sourceConnectionId = result.connectionId ?? connectionId ?? selectedConnectionId;
 
   // Update state when result prop changes
   useEffect(() => {
@@ -53,11 +54,14 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
   useEffect(() => {
     if (!showInsertModal) {
       setInsertTableName(extractTableName(query));
+      return;
     }
+
+    setInsertTableName(extractTableName(query));
   }, [query, showInsertModal]);
 
   const loadMore = useCallback(async () => {
-    if (!connectionId || !query || isLoadingMore || !hasMore) {
+    if (!sourceConnectionId || !query || isLoadingMore || !hasMore) {
       return;
     }
 
@@ -67,7 +71,7 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          connectionId,
+          connectionId: sourceConnectionId,
           query,
           offset: currentOffset.current,
           limit: 100,
@@ -88,7 +92,7 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
     } finally {
       setIsLoadingMore(false);
     }
-  }, [connectionId, query, isLoadingMore, hasMore]);
+  }, [sourceConnectionId, query, isLoadingMore, hasMore]);
 
   // Handle scroll to detect when user reaches bottom
   useEffect(() => {
@@ -109,10 +113,12 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
 
   const rowCountText = getRowCountText(totalCount, allRows.length);
   const canInsert = allRows.length > 0 && result.columns.length > 0;
+  const insertCountIsExact = totalCount !== undefined || !hasMore;
+  const insertCount = totalCount !== undefined ? totalCount : allRows.length;
 
   const fetchAllRowsForInsert = useCallback(async () => {
     if (!hasMore) return allRows;
-    if (!connectionId || !query) {
+    if (!sourceConnectionId || !query) {
       throw new Error('Query and source connection are required to fetch all rows.');
     }
 
@@ -126,7 +132,7 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          connectionId,
+          connectionId: sourceConnectionId,
           query,
           offset,
           limit: 100,
@@ -160,7 +166,7 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
     }
 
     return rows;
-  }, [allRows, connectionId, hasMore, query]);
+  }, [allRows, hasMore, query, sourceConnectionId]);
 
   const handleInsertSubmit = useCallback(
     async (event: FormEvent) => {
@@ -229,6 +235,44 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
     [selectedConnectionId, insertTableName, canInsert, result.columns, allRows, hasMore, fetchAllRowsForInsert]
   );
 
+  const handleExportInsert = useCallback(async () => {
+    const trimmedTable = insertTableName.trim();
+    if (!trimmedTable) {
+      alert('Please provide a target table name');
+      return;
+    }
+
+    if (!canInsert) {
+      alert('No rows available to export');
+      return;
+    }
+
+    let rowsToExport = allRows;
+    if (hasMore) {
+      try {
+        rowsToExport = await fetchAllRowsForInsert();
+      } catch (error) {
+        console.error('Failed to load all rows:', error);
+        alert('Failed to load all rows before exporting');
+        return;
+      }
+    }
+
+    const insertQuery = buildInsertQuery(result.columns, rowsToExport, trimmedTable);
+    if (!insertQuery) {
+      alert('Failed to build insert query');
+      return;
+    }
+
+    const blob = new Blob([insertQuery], { type: 'text/plain' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `inserts_${trimmedTable}_${Date.now()}.sql`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  }, [insertTableName, canInsert, allRows, hasMore, fetchAllRowsForInsert, result.columns]);
+
   // Show loading spinner
   if (isLoading) {
     return (
@@ -294,10 +338,13 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
         selectedConnectionId={selectedConnectionId}
         tableName={insertTableName}
         rowCount={allRows.length}
+        insertCount={insertCount}
+        insertCountIsExact={insertCountIsExact}
         isSubmitting={isInserting}
         onConnectionChange={setSelectedConnectionId}
         onTableNameChange={setInsertTableName}
         onSubmit={handleInsertSubmit}
+        onExportInsert={handleExportInsert}
         onClose={() => setShowInsertModal(false)}
       />
     </div>
