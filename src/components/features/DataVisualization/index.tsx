@@ -46,6 +46,10 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
     if (!resolvedConnectionId) return undefined;
     return connections.find((connection) => connection.id === resolvedConnectionId)?.name;
   }, [connections, connectionId, result.connectionId, result.connectionName, selectedConnectionId]);
+  const tableName = useMemo(() => {
+    const extractedName = extractTableName(query);
+    return extractedName === 'table_name' ? undefined : extractedName;
+  }, [query]);
   const sourceConnectionId = result.connectionId ?? connectionId ?? selectedConnectionId;
 
   // Update state when result prop changes
@@ -430,6 +434,9 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
             <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
               Query Results
             </h3>
+            {tableName ? (
+              <span className="text-xs text-slate-500 dark:text-slate-400">{tableName}</span>
+            ) : null}
           </div>
         </div>
         <div className="flex-1 flex items-center justify-center">
@@ -470,6 +477,7 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
         rowCountText={rowCountText}
         executionTime={result.executionTime}
         connectionName={connectionName}
+        tableName={tableName}
         onToggleExpand={() => setExpanded(!expanded)}
         onExportCsv={handleExportCsv}
         onExportSql={handleExportSql}

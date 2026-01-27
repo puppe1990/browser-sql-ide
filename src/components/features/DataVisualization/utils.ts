@@ -29,14 +29,14 @@ export function extractTableName(query?: string): string {
   const upperQuery = query.trim().toUpperCase();
   if (!upperQuery.startsWith('SELECT')) return 'table_name';
 
-  const fromMatch = query.match(/\bFROM\s+([a-zA-Z_][a-zA-Z0-9_]*)/i);
-  if (fromMatch && fromMatch[1]) {
-    return fromMatch[1];
-  }
-
   const schemaTableMatch = query.match(/\bFROM\s+([a-zA-Z_][a-zA-Z0-9_]*\.[a-zA-Z_][a-zA-Z0-9_]*)/i);
   if (schemaTableMatch && schemaTableMatch[1]) {
     return schemaTableMatch[1];
+  }
+
+  const fromMatch = query.match(/\bFROM\s+([a-zA-Z_][a-zA-Z0-9_]*)/i);
+  if (fromMatch && fromMatch[1]) {
+    return fromMatch[1];
   }
 
   return 'table_name';

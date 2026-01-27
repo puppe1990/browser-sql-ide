@@ -8,6 +8,7 @@ type ResultsHeaderProps = {
   rowCountText: string;
   executionTime: number;
   connectionName?: string;
+  tableName?: string;
   onToggleExpand: () => void;
   onExportCsv: () => void;
   onExportSql: () => void;
@@ -23,6 +24,7 @@ export default function ResultsHeader({
   rowCountText,
   executionTime,
   connectionName,
+  tableName,
   onToggleExpand,
   onExportCsv,
   onExportSql,
@@ -40,6 +42,7 @@ export default function ResultsHeader({
         </h3>
         <span className="text-xs text-slate-500 dark:text-slate-400">
           {rowCountText} • {executionTime}ms
+          {tableName ? ` • ${tableName}` : ''}
           {connectionName ? ` • ${connectionName}` : ''}
         </span>
       </div>
