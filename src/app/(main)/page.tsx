@@ -2,11 +2,21 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import Sidebar from './_components/Sidebar';
-import { processQuery } from '@/lib/query-utils';
 import { getErrorMessage } from '@/lib/utils';
 import type { ComparisonResult, RowData } from '@/types';
 import type { Connection, QueryResultWithMeta } from './types';
 import MainContent from './_components/MainContent';
+import {
+  STORAGE_KEYS,
+  executeQueries,
+  getQueriesFromTabsStorage,
+  parseBoolean,
+  parseNumberInRange,
+  resolveConnectionIds,
+  useHorizontalResize,
+  useLocalStorageState,
+  useVerticalResize,
+} from './_utils/page-helpers';
 
 declare global {
   interface Window {
@@ -14,21 +24,29 @@ declare global {
   }
 }
 
-const STORAGE_KEYS = {
-  SIDEBAR_OPEN: 'browser-sql-ide-sidebar-open',
-  QUERY_RESULTS_HEIGHT: 'browser-sql-ide-query-results-height',
-  SAVED_QUERIES_HEIGHT: 'browser-sql-ide-saved-queries-height',
-  SPLIT_SCREEN: 'browser-sql-ide-split-screen',
-  SPLIT_SCREEN_WIDTH: 'browser-sql-ide-split-screen-width',
-};
+const parsePositiveNumber = (raw: string) => parseNumberInRange(raw, { minExclusive: 0 });
+const parseSplitWidth = (raw: string) =>
+  parseNumberInRange(raw, { minExclusive: 0, maxExclusive: 100 });
 
 export default function Home() {
   const [selectedConnection, setSelectedConnection] = useState<Connection | null>(null);
   const [queryResult, setQueryResult] = useState<QueryResultWithMeta | null>(null);
   const [queryResult2, setQueryResult2] = useState<QueryResultWithMeta | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [splitScreen, setSplitScreen] = useState(false);
-  const [splitScreenWidth, setSplitScreenWidth] = useState<number>(50); // Percentage
+  const [sidebarOpen, setSidebarOpen] = useLocalStorageState(
+    STORAGE_KEYS.SIDEBAR_OPEN,
+    false,
+    parseBoolean,
+  );
+  const [splitScreen, setSplitScreen] = useLocalStorageState(
+    STORAGE_KEYS.SPLIT_SCREEN,
+    false,
+    parseBoolean,
+  );
+  const [splitScreenWidth, setSplitScreenWidth] = useLocalStorageState(
+    STORAGE_KEYS.SPLIT_SCREEN_WIDTH,
+    50,
+    parseSplitWidth,
+  ); // Percentage
   const [compareMode, setCompareMode] = useState(false);
   const [compareKey, setCompareKey] = useState<string>('');
   const [compareFields, setCompareFields] = useState<string[]>([]);
@@ -43,8 +61,16 @@ export default function Home() {
   const [activeConnectionId2, setActiveConnectionId2] = useState<number | undefined>(undefined);
   const [isLoadingResult1, setIsLoadingResult1] = useState(false);
   const [isLoadingResult2, setIsLoadingResult2] = useState(false);
-  const [queryResultsHeight, setQueryResultsHeight] = useState<number>(400); // Default height in pixels
-  const [savedQueriesHeight, setSavedQueriesHeight] = useState<number>(320); // Default height in pixels
+  const [queryResultsHeight, setQueryResultsHeight] = useLocalStorageState(
+    STORAGE_KEYS.QUERY_RESULTS_HEIGHT,
+    400,
+    parsePositiveNumber,
+  ); // Default height in pixels
+  const [savedQueriesHeight, setSavedQueriesHeight] = useLocalStorageState(
+    STORAGE_KEYS.SAVED_QUERIES_HEIGHT,
+    320,
+    parsePositiveNumber,
+  ); // Default height in pixels
   const [isResizing, setIsResizing] = useState(false);
   const [isResizingSavedQueries, setIsResizingSavedQueries] = useState(false);
   const [isResizingSplit, setIsResizingSplit] = useState(false);
@@ -57,185 +83,30 @@ export default function Home() {
   const editor2Ref = useRef<{ addQueryToTab: (query: string) => void } | null>(null);
   const singleEditorRef = useRef<{ addQueryToTab: (query: string) => void } | null>(null);
 
-  // Load sidebar state and heights from localStorage on mount
-  useEffect(() => {
-    const savedSidebarOpen = localStorage.getItem(STORAGE_KEYS.SIDEBAR_OPEN);
-    if (savedSidebarOpen !== null) {
-      setSidebarOpen(savedSidebarOpen === 'true');
-    }
-    
-    const savedQueryResultsHeight = localStorage.getItem(STORAGE_KEYS.QUERY_RESULTS_HEIGHT);
-    if (savedQueryResultsHeight !== null) {
-      const height = parseInt(savedQueryResultsHeight, 10);
-      if (!isNaN(height) && height > 0) {
-        setQueryResultsHeight(height);
-      }
-    }
-    
-    const savedSavedQueriesHeight = localStorage.getItem(STORAGE_KEYS.SAVED_QUERIES_HEIGHT);
-    if (savedSavedQueriesHeight !== null) {
-      const height = parseInt(savedSavedQueriesHeight, 10);
-      if (!isNaN(height) && height > 0) {
-        setSavedQueriesHeight(height);
-      }
-    }
-    
-    const savedSplitScreen = localStorage.getItem(STORAGE_KEYS.SPLIT_SCREEN);
-    if (savedSplitScreen !== null) {
-      setSplitScreen(savedSplitScreen === 'true');
-    }
-    
-    const savedSplitScreenWidth = localStorage.getItem(STORAGE_KEYS.SPLIT_SCREEN_WIDTH);
-    if (savedSplitScreenWidth !== null) {
-      const width = parseFloat(savedSplitScreenWidth);
-      if (!isNaN(width) && width > 0 && width < 100) {
-        setSplitScreenWidth(width);
-      }
-    }
-  }, []);
+  useVerticalResize({
+    isResizing,
+    setIsResizing,
+    onHeightChange: setQueryResultsHeight,
+    minHeight: 200,
+    maxHeightOffset: 200,
+  });
 
-  // Save sidebar state to localStorage when it changes
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.SIDEBAR_OPEN, String(sidebarOpen));
-  }, [sidebarOpen]);
+  useVerticalResize({
+    isResizing: isResizingSavedQueries,
+    setIsResizing: setIsResizingSavedQueries,
+    onHeightChange: setSavedQueriesHeight,
+    minHeight: 150,
+    maxHeightOffset: 200,
+  });
 
-  // Save query results height to localStorage when it changes
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.QUERY_RESULTS_HEIGHT, String(queryResultsHeight));
-  }, [queryResultsHeight]);
-
-  // Save saved queries height to localStorage when it changes
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.SAVED_QUERIES_HEIGHT, String(savedQueriesHeight));
-  }, [savedQueriesHeight]);
-
-  // Save split screen state to localStorage when it changes
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.SPLIT_SCREEN, String(splitScreen));
-  }, [splitScreen]);
-
-  // Save split screen width to localStorage when it changes
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.SPLIT_SCREEN_WIDTH, String(splitScreenWidth));
-  }, [splitScreenWidth]);
-
-  // Handle resizing for Query Results
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isResizing) return;
-      
-      const mainElement = document.querySelector('main');
-      if (!mainElement) return;
-      
-      const mainRect = mainElement.getBoundingClientRect();
-      const newHeight = mainRect.bottom - e.clientY;
-      
-      // Set min and max heights
-      const minHeight = 200;
-      const maxHeight = window.innerHeight - 200;
-      
-      if (newHeight >= minHeight && newHeight <= maxHeight) {
-        setQueryResultsHeight(newHeight);
-      }
-    };
-
-    const handleMouseUp = () => {
-      setIsResizing(false);
-    };
-
-    if (isResizing) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = 'row-resize';
-      document.body.style.userSelect = 'none';
-    }
-
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
-  }, [isResizing]);
-
-  // Handle resizing for Saved Queries
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isResizingSavedQueries) return;
-      
-      const mainElement = document.querySelector('main');
-      if (!mainElement) return;
-      
-      const mainRect = mainElement.getBoundingClientRect();
-      const newHeight = mainRect.bottom - e.clientY;
-      
-      // Set min and max heights
-      const minHeight = 150;
-      const maxHeight = window.innerHeight - 200;
-      
-      if (newHeight >= minHeight && newHeight <= maxHeight) {
-        setSavedQueriesHeight(newHeight);
-      }
-    };
-
-    const handleMouseUp = () => {
-      setIsResizingSavedQueries(false);
-    };
-
-    if (isResizingSavedQueries) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = 'row-resize';
-      document.body.style.userSelect = 'none';
-    }
-
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
-  }, [isResizingSavedQueries]);
-
-  // Handle resizing for Split Screen
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isResizingSplit || !splitScreen) return;
-      
-      const mainElement = document.querySelector('main');
-      if (!mainElement) return;
-      
-      const mainRect = mainElement.getBoundingClientRect();
-      const relativeX = e.clientX - mainRect.left;
-      const percentage = (relativeX / mainRect.width) * 100;
-      
-      // Set min and max widths (20% to 80%)
-      const minWidth = 20;
-      const maxWidth = 80;
-      
-      if (percentage >= minWidth && percentage <= maxWidth) {
-        setSplitScreenWidth(percentage);
-      }
-    };
-
-    const handleMouseUp = () => {
-      setIsResizingSplit(false);
-    };
-
-    if (isResizingSplit) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = 'col-resize';
-      document.body.style.userSelect = 'none';
-    }
-
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
-  }, [isResizingSplit, splitScreen]);
+  useHorizontalResize({
+    isResizing: isResizingSplit,
+    enabled: splitScreen,
+    setIsResizing: setIsResizingSplit,
+    onWidthChange: setSplitScreenWidth,
+    minWidthPercent: 20,
+    maxWidthPercent: 80,
+  });
 
   // Restore compare mode after re-execute completes and results are updated
   useEffect(() => {
@@ -288,39 +159,13 @@ export default function Home() {
       return;
     }
 
-    // Get connection IDs from each editor, fallback to selectedConnection or first connection
-    let connectionId1 = activeConnectionId1;
-    let connectionId2 = activeConnectionId2;
-
-    // If no connection selected in editors, try to get from global selectedConnection
-    if (!connectionId1 || !connectionId2) {
-      if (selectedConnection) {
-        if (!connectionId1) connectionId1 = selectedConnection.id;
-        if (!connectionId2) connectionId2 = selectedConnection.id;
-      } else {
-        // Try to get first available connection
-        try {
-          const response = await fetch('/api/connections');
-          const data = await response.json();
-          const connections = data.connections || [];
-          if (connections.length > 0) {
-            const firstConnectionId = connections[0].id;
-            if (!connectionId1) connectionId1 = firstConnectionId;
-            if (!connectionId2) connectionId2 = firstConnectionId;
-          } else {
-            alert('Please select a connection in the editors or add a connection first');
-            return;
-          }
-        } catch (error) {
-          console.error('Failed to load connections:', error);
-          alert('Failed to load connections');
-          return;
-        }
-      }
-    }
-
-    if (!connectionId1 || !connectionId2) {
-      alert('Please select a connection in both editors');
+    const resolved = await resolveConnectionIds({
+      activeConnectionId1,
+      activeConnectionId2,
+      selectedConnection,
+    });
+    if ('error' in resolved) {
+      alert(resolved.error);
       return;
     }
 
@@ -330,29 +175,10 @@ export default function Home() {
 
     try {
       // Execute both queries in parallel with their respective connections
-      const promises = [
-        { query: query1, connectionId: connectionId1 },
-        { query: query2, connectionId: connectionId2 }
-      ].map(async ({ query, connectionId }) => {
-        const processedQuery = processQuery(query);
-        const response = await fetch('/api/query/execute', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            connectionId,
-            query: processedQuery,
-          }),
-        });
-
-        const data = await response.json();
-        if (data.success) {
-          return { ...data.result, query: processedQuery };
-        } else {
-          throw new Error(data.error || 'Query execution failed');
-        }
-      });
-
-      const executedResults = await Promise.all(promises);
+      const executedResults = await executeQueries([
+        { query: query1, connectionId: resolved.connectionId1 },
+        { query: query2, connectionId: resolved.connectionId2 },
+      ]);
       
       // Update results
       setQueryResult(executedResults[0]);
@@ -373,39 +199,13 @@ export default function Home() {
 
   // Re-execute both queries with same filters
   const handleReExecuteCompare = async () => {
-    // Get connection IDs from each editor, fallback to selectedConnection or first connection
-    let connectionId1 = activeConnectionId1;
-    let connectionId2 = activeConnectionId2;
-
-    // If no connection selected in editors, try to get from global selectedConnection
-    if (!connectionId1 || !connectionId2) {
-      if (selectedConnection) {
-        if (!connectionId1) connectionId1 = selectedConnection.id;
-        if (!connectionId2) connectionId2 = selectedConnection.id;
-      } else {
-        // Try to get first available connection
-        try {
-          const response = await fetch('/api/connections');
-          const data = await response.json();
-          const connections = data.connections || [];
-          if (connections.length > 0) {
-            const firstConnectionId = connections[0].id;
-            if (!connectionId1) connectionId1 = firstConnectionId;
-            if (!connectionId2) connectionId2 = firstConnectionId;
-          } else {
-            alert('Please select a connection in the editors or add a connection first');
-            return;
-          }
-        } catch (error) {
-          console.error('Failed to load connections:', error);
-          alert('Failed to load connections');
-          return;
-        }
-      }
-    }
-
-    if (!connectionId1 || !connectionId2) {
-      alert('Please select a connection in both editors');
+    const resolved = await resolveConnectionIds({
+      activeConnectionId1,
+      activeConnectionId2,
+      selectedConnection,
+    });
+    if ('error' in resolved) {
+      alert(resolved.error);
       return;
     }
 
@@ -415,28 +215,9 @@ export default function Home() {
 
     // If queries are still not found, try to get from tabs in localStorage
     if (!query1 || !query2) {
-      try {
-        const savedTabs = localStorage.getItem('browser-sql-ide-tabs');
-        if (savedTabs) {
-          const tabs = JSON.parse(savedTabs);
-          if (tabs.length > 0) {
-            if (!query1 && tabs[0]?.query) {
-              query1 = tabs[0].query;
-            }
-            if (!query2) {
-              // In split screen, try to find the second tab
-              if (tabs.length > 1 && tabs[1]?.query) {
-                query2 = tabs[1].query;
-              } else if (tabs[0]?.query) {
-                // Fallback: use first tab if only one exists
-                query2 = tabs[0].query;
-              }
-            }
-          }
-        }
-      } catch (e) {
-        console.error('Failed to get queries from tabs:', e);
-      }
+      const storedQueries = getQueriesFromTabsStorage();
+      if (!query1) query1 = storedQueries.query1;
+      if (!query2) query2 = storedQueries.query2;
     }
 
     if (!query1 || !query2) {
@@ -455,29 +236,10 @@ export default function Home() {
 
     try {
       // Execute both queries in parallel with their respective connections
-      const promises = [
-        { query: query1, connectionId: connectionId1 },
-        { query: query2, connectionId: connectionId2 }
-      ].map(async ({ query, connectionId }) => {
-        const processedQuery = processQuery(query);
-        const response = await fetch('/api/query/execute', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            connectionId,
-            query: processedQuery,
-          }),
-        });
-
-        const data = await response.json();
-        if (data.success) {
-          return { ...data.result, query: processedQuery };
-        } else {
-          throw new Error(data.error || 'Query execution failed');
-        }
-      });
-
-      const executedResults = await Promise.all(promises);
+      const executedResults = await executeQueries([
+        { query: query1, connectionId: resolved.connectionId1 },
+        { query: query2, connectionId: resolved.connectionId2 },
+      ]);
       
       // Create completely new objects with new arrays to ensure React detects the change
       const newResult1: QueryResultWithMeta = {

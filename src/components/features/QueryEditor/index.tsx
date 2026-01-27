@@ -1,16 +1,21 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
-import type { ChangeEvent } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
-import { processQuery } from '@/lib/query-utils';
 import { getErrorMessage } from '@/lib/utils';
 import type { QueryResult } from '@/types';
 import type * as Monaco from 'monaco-editor';
 import EditorHeader from './_components/EditorHeader';
 import EditorFooter from './_components/EditorFooter';
-import type { Connection } from './types';
 import { findErrorLine, getQueryFromEditor } from './utils';
+import {
+  executeQueryRequest,
+  getInitialQuery,
+  QUERY_STORAGE_KEY,
+  useConnections,
+  useDebouncedLocalStorage,
+  useErrorDecoration,
+} from './helpers';
 
 interface QueryEditorProps {
   connectionId?: number;
@@ -23,8 +28,6 @@ interface QueryEditorProps {
   onQueryError?: () => void; // Callback when query execution fails
 }
 
-const STORAGE_KEY = 'browser-sql-ide-query';
-
 export default function QueryEditor({
   connectionId,
   initialQuery = '',
@@ -35,85 +38,16 @@ export default function QueryEditor({
   onQueryStart,
   onQueryError,
 }: QueryEditorProps) {
-  const [connections, setConnections] = useState<Connection[]>([]);
-  const [selectedConnectionId, setSelectedConnectionId] = useState<number | undefined>(connectionId);
-
-  const loadConnections = useCallback(async () => {
-    try {
-      const response = await fetch('/api/connections');
-      const data = await response.json();
-      const loadedConnections = data.connections || [];
-      setConnections(loadedConnections);
-
-      if (loadedConnections.length === 0) {
-        if (selectedConnectionId !== undefined) {
-          setSelectedConnectionId(undefined);
-        }
-        return;
-      }
-
-      const hasSelected = selectedConnectionId !== undefined &&
-        loadedConnections.some((conn: Connection) => conn.id === selectedConnectionId);
-      const nextConnectionId = hasSelected ? selectedConnectionId : loadedConnections[0].id;
-
-      if (nextConnectionId !== selectedConnectionId) {
-        setSelectedConnectionId(nextConnectionId);
-      }
-      if (onConnectionChange) {
-        onConnectionChange(nextConnectionId);
-      }
-    } catch (error) {
-      console.error('Failed to load connections:', error);
-    }
-  }, [onConnectionChange, selectedConnectionId]);
-
-  // Load connections and auto-select first one
-  useEffect(() => {
-    loadConnections();
-  }, [loadConnections]);
-
-  useEffect(() => {
-    const handleConnectionsUpdated = () => {
-      loadConnections();
-    };
-
-    window.addEventListener('connections-updated', handleConnectionsUpdated);
-    return () => {
-      window.removeEventListener('connections-updated', handleConnectionsUpdated);
-    };
-  }, [loadConnections]);
-
-  // Update selected connection when connectionId prop changes
-  useEffect(() => {
-    if (connectionId !== undefined) {
-      setSelectedConnectionId(connectionId);
-    }
-  }, [connectionId]);
-
-  // Handle connection selection change
-  const handleConnectionChange = (e: ChangeEvent<HTMLSelectElement>) => {
-    const newConnectionId = parseInt(e.target.value, 10);
-    setSelectedConnectionId(newConnectionId);
-    if (onConnectionChange) {
-      onConnectionChange(newConnectionId);
-    }
-  };
+  const {
+    connections,
+    selectedConnectionId,
+    handleConnectionChange,
+  } = useConnections({ connectionId, onConnectionChange });
 
   // Load query from localStorage on mount if initialQuery is empty (fallback for non-tabbed usage)
   const [query, setQuery] = useState(() => {
-    // If onQueryChange is provided, we're in tabbed mode - always use initialQuery
-    if (onQueryChange !== undefined) {
-      return initialQuery || '';
-    }
-    // Otherwise, fallback to localStorage for standalone usage
-    if (initialQuery) {
-      return initialQuery;
-    }
-    if (typeof window !== 'undefined') {
-      const savedQuery = localStorage.getItem(STORAGE_KEY);
-      return savedQuery || '';
-    }
-    return '';
+    const isTabbed = onQueryChange !== undefined;
+    return getInitialQuery({ initialQuery, isTabbed });
   });
   const [isExecuting, setIsExecuting] = useState(false);
   const [result, setResult] = useState<QueryResult | null>(null);
@@ -146,64 +80,20 @@ export default function QueryEditor({
     }
   }, [initialQuery, onQueryChange]);
 
-  // Highlight error line in editor
-  useEffect(() => {
-    if (error && errorLine && editorRef.current && monacoRef.current) {
-      const editor = editorRef.current;
-      const monaco = monacoRef.current;
-      
-      // Remove previous decoration
-      const oldDecorations = errorDecorationRef.current ? [errorDecorationRef.current] : [];
-      
-      // Add new decoration to highlight the error line
-      const lineNumber = errorLine;
-      const maxColumn = editor.getModel()?.getLineMaxColumn(lineNumber) || 1;
-      const range = new monaco.Range(lineNumber, 1, lineNumber, maxColumn);
-      
-      const newDecorations = editor.deltaDecorations(
-        oldDecorations,
-        [
-          {
-            range: range,
-            options: {
-              isWholeLine: true,
-              className: 'monaco-error-line',
-              glyphMarginClassName: 'monaco-error-glyph',
-              minimap: {
-                color: '#ef4444',
-                position: monaco.editor.MinimapPosition.Inline,
-              },
-              overviewRuler: {
-                color: '#ef4444',
-                position: monaco.editor.OverviewRulerLane.Right,
-              },
-              hoverMessage: { value: error },
-            },
-          },
-        ]
-      );
-      
-      errorDecorationRef.current = newDecorations[0];
-      
-      // Scroll to error line
-      editor.revealLineInCenter(lineNumber);
-    } else if (!error && errorDecorationRef.current && editorRef.current) {
-      // Clear decoration when error is cleared
-      editorRef.current.deltaDecorations([errorDecorationRef.current], []);
-      errorDecorationRef.current = null;
-    }
-  }, [error, errorLine]);
+  useErrorDecoration({
+    error,
+    errorLine,
+    editorRef,
+    monacoRef,
+    errorDecorationRef,
+  });
 
   // Save query to localStorage when it changes (debounced) - only if onQueryChange is not provided (fallback for non-tabbed usage)
-  useEffect(() => {
-    if (!onQueryChange) {
-      const timeoutId = setTimeout(() => {
-        localStorage.setItem(STORAGE_KEY, query);
-      }, 500); // Debounce by 500ms to avoid too frequent writes
-
-      return () => clearTimeout(timeoutId);
-    }
-  }, [query, onQueryChange]);
+  useDebouncedLocalStorage({
+    key: QUERY_STORAGE_KEY,
+    value: query,
+    enabled: onQueryChange === undefined,
+  });
 
   // Keep refs in sync
   useEffect(() => {
@@ -234,9 +124,7 @@ export default function QueryEditor({
           
           const currentConnectionId = selectedConnectionId || connectionIdRef.current;
           if (currentConnectionId && queryToExecute.trim() && !isExecutingRef.current && handleExecuteRef.current) {
-            // Process query to ensure complete lines with semicolons are considered
-            const processedQuery = processQuery(queryToExecute);
-            handleExecuteRef.current(processedQuery);
+            handleExecuteRef.current(queryToExecute);
           }
         }
       }
@@ -266,9 +154,7 @@ export default function QueryEditor({
       
       const currentConnectionId = selectedConnectionId || connectionIdRef.current;
       if (currentConnectionId && queryToExecute.trim() && !isExecutingRef.current && handleExecuteRef.current) {
-        // Process query to ensure complete lines with semicolons are considered
-        const processedQuery = processQuery(queryToExecute);
-        handleExecuteRef.current(processedQuery);
+        handleExecuteRef.current(queryToExecute);
       }
     };
 
@@ -307,40 +193,12 @@ export default function QueryEditor({
       errorDecorationRef.current = null;
     }
 
-    // Process query to ensure complete lines with semicolons are considered
-    const processedQuery = processQuery(queryValue);
-
     try {
-      const response = await fetch('/api/query/execute', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          connectionId: connectionToUse,
-          query: processedQuery,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        const resultData = data.result as QueryResult;
-        setResult(resultData);
-        if (onQueryResult) {
-          // Pass the original query (before processing) along with the result for pagination
-          onQueryResult(resultData, queryValue || undefined);
-        }
-      } else {
-        const errorMessage = data.error || 'Query execution failed';
-        setError(errorMessage);
-        // Try to find the line number where the error occurred
-        const lineNum = findErrorLine(errorMessage, queryValue);
-        if (lineNum) {
-          setErrorLine(lineNum);
-        }
-        // Notify parent about error
-        if (onQueryError) {
-          onQueryError();
-        }
+      const resultData = await executeQueryRequest(connectionToUse, queryValue);
+      setResult(resultData);
+      if (onQueryResult) {
+        // Pass the original query (before processing) along with the result for pagination
+        onQueryResult(resultData, queryValue || undefined);
       }
     } catch (err: unknown) {
       const errorMessage = getErrorMessage(err) || 'Failed to execute query';
