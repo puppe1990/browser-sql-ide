@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Database, Plus, Edit, Trash2, TestTube, X, Upload, Download } from 'lucide-react';
+import { Database, Plus, Edit, Trash2, TestTube, X, Upload, Download, Star } from 'lucide-react';
 
 interface Connection {
   id: number;
@@ -21,11 +21,14 @@ interface ConnectionManagerProps {
   selectedConnectionId?: number;
 }
 
+const DEFAULT_CONNECTION_KEY = 'browser-sql-ide-default-connection';
+
 export default function ConnectionManager({
   onConnectionSelect,
   selectedConnectionId,
 }: ConnectionManagerProps) {
   const [connections, setConnections] = useState<Connection[]>([]);
+  const [defaultConnectionId, setDefaultConnectionId] = useState<number | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [editingConnection, setEditingConnection] = useState<Connection | null>(null);
@@ -49,14 +52,45 @@ export default function ConnectionManager({
     loadConnections();
   }, []);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const storedDefaultId = localStorage.getItem(DEFAULT_CONNECTION_KEY);
+    if (storedDefaultId) {
+      const parsed = parseInt(storedDefaultId, 10);
+      setDefaultConnectionId(Number.isFinite(parsed) ? parsed : null);
+    }
+  }, []);
+
   const loadConnections = async () => {
     try {
       const response = await fetch('/api/connections');
       const data = await response.json();
-      setConnections(data.connections || []);
+      const loadedConnections = data.connections || [];
+      setConnections(loadedConnections);
+      if (defaultConnectionId !== null) {
+        const exists = loadedConnections.some((conn: Connection) => conn.id === defaultConnectionId);
+        if (!exists) {
+          localStorage.removeItem(DEFAULT_CONNECTION_KEY);
+          setDefaultConnectionId(null);
+          window.dispatchEvent(new CustomEvent('default-connection-updated'));
+        }
+      }
     } catch (error) {
       console.error('Failed to load connections:', error);
     }
+  };
+
+  const handleSetDefault = (connectionId: number) => {
+    if (typeof window === 'undefined') return;
+    const isDefault = defaultConnectionId === connectionId;
+    if (isDefault) {
+      localStorage.removeItem(DEFAULT_CONNECTION_KEY);
+      setDefaultConnectionId(null);
+    } else {
+      localStorage.setItem(DEFAULT_CONNECTION_KEY, String(connectionId));
+      setDefaultConnectionId(connectionId);
+    }
+    window.dispatchEvent(new CustomEvent('default-connection-updated'));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -365,14 +399,42 @@ export default function ConnectionManager({
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
-                    {connection.name}
-                  </h3>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <h3 className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
+                      {connection.name}
+                    </h3>
+                    {defaultConnectionId === connection.id && (
+                      <span className="text-[10px] uppercase tracking-wide text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800/60 px-1.5 py-0.5 rounded-full flex-shrink-0">
+                        Default
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-mono truncate">
                     {connection.type}://{connection.username}@{connection.host}:{connection.port}/{connection.database}
                   </p>
                 </div>
                 <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSetDefault(connection.id);
+                    }}
+                    className={`p-1.5 rounded transition-colors ${
+                      defaultConnectionId === connection.id
+                        ? 'text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20'
+                        : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
+                    }`}
+                    title={
+                      defaultConnectionId === connection.id
+                        ? 'Unset default connection'
+                        : 'Set as default connection'
+                    }
+                  >
+                    <Star
+                      className="w-3.5 h-3.5"
+                      fill={defaultConnectionId === connection.id ? 'currentColor' : 'none'}
+                    />
+                  </button>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();

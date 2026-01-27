@@ -8,6 +8,7 @@ interface Tab {
   id: string;
   name: string;
   query: string;
+  connectionId?: number;
   result?: any;
   error?: string;
 }
@@ -27,6 +28,15 @@ interface TabbedQueryEditorProps {
 
 const STORAGE_KEY = 'browser-sql-ide-tabs';
 const STORAGE_ACTIVE_TAB_KEY = 'browser-sql-ide-active-tab';
+const DEFAULT_CONNECTION_KEY = 'browser-sql-ide-default-connection';
+
+const getDefaultConnectionId = () => {
+  if (typeof window === 'undefined') return undefined;
+  const stored = localStorage.getItem(DEFAULT_CONNECTION_KEY);
+  if (!stored) return undefined;
+  const parsed = parseInt(stored, 10);
+  return Number.isFinite(parsed) ? parsed : undefined;
+};
 
 // Get storage keys based on editor ID for split screen support
 const getStorageKeys = (editorId?: string) => {
@@ -56,12 +66,15 @@ export default function TabbedQueryEditor({
 }: TabbedQueryEditorProps) {
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
+  const [defaultConnectionId, setDefaultConnectionId] = useState<number | undefined>(undefined);
 
   const createNewTab = useCallback(() => {
+    const preferredConnectionId = defaultConnectionId ?? getDefaultConnectionId() ?? connectionId;
     const newTab: Tab = {
       id: `tab-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       name: `Query 1`,
       query: '',
+      connectionId: preferredConnectionId,
     };
     
     setTabs((prev) => {
@@ -70,11 +83,12 @@ export default function TabbedQueryEditor({
     });
     setActiveTabId(newTab.id);
     return newTab.id;
-  }, []);
+  }, [connectionId, defaultConnectionId]);
 
   // Load tabs from localStorage on mount
   useEffect(() => {
     if (typeof window !== 'undefined') {
+      setDefaultConnectionId(getDefaultConnectionId());
       const storageKeys = getStorageKeys(editorId);
       const savedTabs = localStorage.getItem(storageKeys.tabs);
       const savedActiveTab = localStorage.getItem(storageKeys.activeTab);
@@ -101,6 +115,17 @@ export default function TabbedQueryEditor({
       }
     }
   }, [createNewTab]);
+
+  useEffect(() => {
+    const handleDefaultConnectionUpdated = () => {
+      setDefaultConnectionId(getDefaultConnectionId());
+    };
+
+    window.addEventListener('default-connection-updated', handleDefaultConnectionUpdated);
+    return () => {
+      window.removeEventListener('default-connection-updated', handleDefaultConnectionUpdated);
+    };
+  }, []);
 
 
   // Save active tab to localStorage when it changes
@@ -143,6 +168,12 @@ export default function TabbedQueryEditor({
   const updateTabQuery = useCallback((tabId: string, query: string) => {
     setTabs((prev) =>
       prev.map((tab) => (tab.id === tabId ? { ...tab, query } : tab))
+    );
+  }, []);
+
+  const updateTabConnection = useCallback((tabId: string, connectionId: number) => {
+    setTabs((prev) =>
+      prev.map((tab) => (tab.id === tabId ? { ...tab, connectionId } : tab))
     );
   }, []);
 
@@ -192,18 +223,29 @@ export default function TabbedQueryEditor({
     }
   }, [activeTabId, updateTabQuery]);
 
+  const handleConnectionChange = useCallback((newConnectionId: number) => {
+    if (activeTabId) {
+      updateTabConnection(activeTabId, newConnectionId);
+    }
+    if (onConnectionChange) {
+      onConnectionChange(newConnectionId);
+    }
+  }, [activeTabId, onConnectionChange, updateTabConnection]);
+
   // Method to add a query from outside (e.g., SavedQueries)
   const addQueryToNewTab = useCallback((query: string) => {
+    const preferredConnectionId = defaultConnectionId ?? getDefaultConnectionId() ?? connectionId;
     setTabs((prev) => {
       const newTab: Tab = {
         id: `tab-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         name: `Query ${prev.length + 1}`,
         query,
+        connectionId: preferredConnectionId,
       };
       setActiveTabId(newTab.id);
       return [...prev, newTab];
     });
-  }, []);
+  }, [connectionId, defaultConnectionId]);
 
   // Expose addQueryToNewTab via ref if provided
   useEffect(() => {
@@ -266,12 +308,12 @@ export default function TabbedQueryEditor({
       <div className="flex-1 min-h-0 overflow-hidden">
         <QueryEditor
           key={activeTabId}
-          connectionId={connectionId}
+          connectionId={activeTab.connectionId ?? connectionId}
           initialQuery={activeTab.query}
           onQuerySave={onQuerySave}
           onQueryResult={handleQueryResult}
           onQueryChange={handleQueryChange}
-          onConnectionChange={onConnectionChange}
+          onConnectionChange={handleConnectionChange}
           onQueryStart={onQueryStart}
           onQueryError={onQueryError}
         />
