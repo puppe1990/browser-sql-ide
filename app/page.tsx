@@ -66,6 +66,11 @@ export default function Home() {
   const [isResizing, setIsResizing] = useState(false);
   const [isResizingSavedQueries, setIsResizingSavedQueries] = useState(false);
   const [isResizingSplit, setIsResizingSplit] = useState(false);
+  const [pendingCompareRestore, setPendingCompareRestore] = useState<{
+    compareMode: boolean;
+    compareKey: string;
+    compareFields: string[];
+  } | null>(null);
   const editor1Ref = useRef<{ addQueryToTab: (query: string) => void } | null>(null);
   const editor2Ref = useRef<{ addQueryToTab: (query: string) => void } | null>(null);
   const singleEditorRef = useRef<{ addQueryToTab: (query: string) => void } | null>(null);
@@ -249,6 +254,19 @@ export default function Home() {
       document.body.style.userSelect = '';
     };
   }, [isResizingSplit, splitScreen]);
+
+  // Restore compare mode after re-execute completes and results are updated
+  useEffect(() => {
+    if (pendingCompareRestore && queryResult && queryResult2 && !isReExecuting && !isLoadingResult1 && !isLoadingResult2) {
+      // Use requestAnimationFrame to ensure state updates happen after render
+      requestAnimationFrame(() => {
+        setCompareMode(pendingCompareRestore.compareMode);
+        setCompareKey(pendingCompareRestore.compareKey);
+        setCompareFields(pendingCompareRestore.compareFields);
+        setPendingCompareRestore(null);
+      });
+    }
+  }, [queryResult, queryResult2, isReExecuting, isLoadingResult1, isLoadingResult2, pendingCompareRestore]);
 
   const handleConnectionSelect = (connection: Connection) => {
     setSelectedConnection(connection);
@@ -477,23 +495,36 @@ export default function Home() {
 
       const executedResults = await Promise.all(promises);
       
-      // Restore compare mode and filters BEFORE updating results
-      // This ensures they are preserved
-      if (savedCompareMode) {
-        setCompareMode(true);
-        setCompareKey(savedCompareKey);
-        setCompareFields(savedCompareFields);
-      }
+      // Create completely new objects with new arrays to ensure React detects the change
+      const newResult1: QueryResultWithMeta = {
+        ...executedResults[0],
+        rows: [...executedResults[0].rows],
+        columns: [...executedResults[0].columns],
+      };
+      const newResult2: QueryResultWithMeta = {
+        ...executedResults[1],
+        rows: [...executedResults[1].rows],
+        columns: [...executedResults[1].columns],
+      };
       
-      // Update results directly without going through handleQueryResult
-      // to avoid disabling compare mode
-      setQueryResult(executedResults[0]);
-      setQueryResult2(executedResults[1]);
+      // Update results first
+      setQueryResult(newResult1);
+      setQueryResult2(newResult2);
       setIsLoadingResult1(false);
       setIsLoadingResult2(false);
+      
+      // Store compare mode restoration to be applied after results are updated
+      if (savedCompareMode) {
+        setPendingCompareRestore({
+          compareMode: true,
+          compareKey: savedCompareKey,
+          compareFields: savedCompareFields,
+        });
+      }
     } catch (error: any) {
       setIsLoadingResult1(false);
       setIsLoadingResult2(false);
+      setPendingCompareRestore(null); // Clear pending restore on error
       alert(`Failed to execute query: ${error.message || 'Unknown error'}`);
     } finally {
       setIsReExecuting(false);

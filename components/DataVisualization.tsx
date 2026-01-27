@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Download, Maximize2, Loader2 } from 'lucide-react';
+import { Download, Maximize2, Loader2, Database } from 'lucide-react';
 
 interface QueryResult {
   columns: string[];
@@ -110,6 +110,76 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
     window.URL.revokeObjectURL(url);
   };
 
+  // Extract table name from SELECT query (simple heuristic)
+  const extractTableName = (query?: string): string => {
+    if (!query) return 'table_name';
+    
+    const upperQuery = query.trim().toUpperCase();
+    if (!upperQuery.startsWith('SELECT')) return 'table_name';
+    
+    // Try to find FROM clause
+    const fromMatch = query.match(/\bFROM\s+([a-zA-Z_][a-zA-Z0-9_]*)/i);
+    if (fromMatch && fromMatch[1]) {
+      return fromMatch[1];
+    }
+    
+    // Try to find table name after FROM with schema.table format
+    const schemaTableMatch = query.match(/\bFROM\s+([a-zA-Z_][a-zA-Z0-9_]*\.[a-zA-Z_][a-zA-Z0-9_]*)/i);
+    if (schemaTableMatch && schemaTableMatch[1]) {
+      return schemaTableMatch[1];
+    }
+    
+    return 'table_name';
+  };
+
+  // Escape SQL string value
+  const escapeSqlValue = (value: any): string => {
+    if (value === null || value === undefined) {
+      return 'NULL';
+    }
+    
+    if (typeof value === 'boolean') {
+      return value ? 'TRUE' : 'FALSE';
+    }
+    
+    if (typeof value === 'number') {
+      return String(value);
+    }
+    
+    if (typeof value === 'object') {
+      // Convert objects/arrays to JSON string
+      const jsonStr = JSON.stringify(value);
+      return `'${jsonStr.replace(/'/g, "''")}'`;
+    }
+    
+    // Escape single quotes in strings
+    const str = String(value);
+    return `'${str.replace(/'/g, "''")}'`;
+  };
+
+  const exportToInserts = () => {
+    if (!allRows.length) return;
+
+    const tableName = extractTableName(query);
+    const columns = result.columns;
+    const inserts: string[] = [];
+
+    allRows.forEach((row) => {
+      const values = columns.map((col) => escapeSqlValue(row[col]));
+      const insert = `INSERT INTO ${tableName} (${columns.join(', ')}) VALUES (${values.join(', ')});`;
+      inserts.push(insert);
+    });
+
+    const sqlContent = inserts.join('\n');
+    const blob = new Blob([sqlContent], { type: 'text/plain' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `inserts_${tableName}_${Date.now()}.sql`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
   // Show loading spinner
   if (isLoading) {
     return (
@@ -170,6 +240,13 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
             title="Export to CSV"
           >
             <Download className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={exportToInserts}
+            className="p-1.5 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition-colors"
+            title="Export as INSERT statements"
+          >
+            <Database className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
