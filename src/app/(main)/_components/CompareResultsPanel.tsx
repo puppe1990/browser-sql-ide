@@ -1,6 +1,6 @@
 'use client';
 
-import { Download, RefreshCw } from 'lucide-react';
+import { Download, RefreshCw, X } from 'lucide-react';
 import type { ComparisonResult } from '@/types';
 
 type CompareResultsPanelProps = {
@@ -12,6 +12,7 @@ type CompareResultsPanelProps = {
   onExport: () => void;
   onReExecute: () => void;
   onSelectFields: () => void;
+  onClose: () => void;
 };
 
 export default function CompareResultsPanel({
@@ -23,6 +24,7 @@ export default function CompareResultsPanel({
   onExport,
   onReExecute,
   onSelectFields,
+  onClose,
 }: CompareResultsPanelProps) {
   return (
     <div className="flex flex-col overflow-auto" style={{ height: `${height}px`, minHeight: '200px', flexShrink: 0 }}>
@@ -62,6 +64,13 @@ export default function CompareResultsPanel({
               title="Select fields to compare"
             >
               {compareFields.length > 0 ? 'Change Fields' : 'Select Fields'}
+            </button>
+            <button
+              onClick={onClose}
+              className="p-1.5 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition-colors"
+              title="Close comparison results"
+            >
+              <X className="w-3.5 h-3.5" />
             </button>
             <div className="flex gap-4 text-xs">
               <span className="flex items-center gap-1">

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import type { ReactNode } from 'react';
 import Editor from '@monaco-editor/react';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import { getErrorMessage } from '@/lib/utils';
@@ -55,7 +56,14 @@ export default function QueryEditor({
   const [result, setResult] = useState<QueryResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [errorLine, setErrorLine] = useState<number | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState({
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    open: boolean;
+    query: string;
+    title: string;
+    message: ReactNode;
+    confirmLabel: string;
+    confirmTone: 'primary' | 'danger';
+  }>({
     open: false,
     query: '',
     title: '',
@@ -234,11 +242,22 @@ export default function QueryEditor({
     
     const deleteInfo = getDeleteConfirmationInfo(queryValue);
     if (deleteInfo.hasDelete) {
+      const resolvedConnectionId = selectedConnectionId ?? connectionId;
+      const connectionName = resolvedConnectionId
+        ? connections.find((connection) => connection.id === resolvedConnectionId)?.name
+        : undefined;
+      const message = connectionName ? (
+        <div>
+          <div>{deleteInfo.message}</div>
+          <div className="mt-2 text-xs text-gray-500">Connection: {connectionName}</div>
+        </div>
+      ) : deleteInfo.message;
+
       setDeleteConfirm({
         open: true,
         query: queryValue,
         title: deleteInfo.title,
-        message: deleteInfo.message,
+        message,
         confirmLabel: deleteInfo.hasDeleteWithoutWhere
           ? 'Yes, delete all rows'
           : 'Yes, run DELETE',

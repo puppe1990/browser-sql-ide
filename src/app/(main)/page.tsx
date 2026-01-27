@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
+import type { ReactNode } from 'react';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import Sidebar from './_components/Sidebar';
 import { getErrorMessage } from '@/lib/utils';
@@ -33,7 +34,7 @@ const parseSplitWidth = (raw: string) =>
 type DeleteConfirmState = {
   open: boolean;
   title: string;
-  message: string;
+  message: ReactNode;
   confirmLabel: string;
   confirmTone: 'primary' | 'danger';
   onConfirm: (() => void | Promise<void>) | null;
@@ -78,6 +79,7 @@ export default function Home() {
   const [activeQuery2, setActiveQuery2] = useState<string>('');
   const [activeConnectionId1, setActiveConnectionId1] = useState<number | undefined>(undefined);
   const [activeConnectionId2, setActiveConnectionId2] = useState<number | undefined>(undefined);
+  const [connectionsById, setConnectionsById] = useState<Record<number, string>>({});
   const [isLoadingResult1, setIsLoadingResult1] = useState(false);
   const [isLoadingResult2, setIsLoadingResult2] = useState(false);
   const [queryResultsHeight, setQueryResultsHeight] = useLocalStorageState(
@@ -101,6 +103,32 @@ export default function Home() {
   const editor1Ref = useRef<{ addQueryToTab: (query: string) => void } | null>(null);
   const editor2Ref = useRef<{ addQueryToTab: (query: string) => void } | null>(null);
   const singleEditorRef = useRef<{ addQueryToTab: (query: string) => void } | null>(null);
+
+  useEffect(() => {
+    const loadConnections = async () => {
+      try {
+        const response = await fetch('/api/connections');
+        const data = await response.json();
+        const loadedConnections = data.connections || [];
+        const map: Record<number, string> = {};
+        loadedConnections.forEach((connection: Connection) => {
+          map[connection.id] = connection.name;
+        });
+        setConnectionsById(map);
+      } catch (error) {
+        console.error('Failed to load connections:', error);
+      }
+    };
+
+    loadConnections();
+    const handleConnectionsUpdated = () => {
+      loadConnections();
+    };
+    window.addEventListener('connections-updated', handleConnectionsUpdated);
+    return () => {
+      window.removeEventListener('connections-updated', handleConnectionsUpdated);
+    };
+  }, []);
 
   useVerticalResize({
     isResizing,
@@ -176,14 +204,28 @@ export default function Home() {
     setDeleteConfirm((prev) => ({ ...prev, open: false, onConfirm: null }));
   };
 
-  const requestDeleteConfirmation = (queries: string[], onConfirm: () => void) => {
+  const requestDeleteConfirmation = (
+    queries: string[],
+    onConfirm: () => void,
+    connectionNames: string[] = [],
+  ) => {
     const deleteInfo = getDeleteConfirmationInfo(queries.join(';\n'));
     if (!deleteInfo.hasDelete) return false;
+
+    const uniqueNames = connectionNames.filter(Boolean).filter((name, index, arr) => arr.indexOf(name) === index);
+    const message = uniqueNames.length > 0 ? (
+      <div>
+        <div>{deleteInfo.message}</div>
+        <div className="mt-2 text-xs text-gray-500">
+          Connection{uniqueNames.length > 1 ? 's' : ''}: {uniqueNames.join(', ')}
+        </div>
+      </div>
+    ) : deleteInfo.message;
 
     setDeleteConfirm({
       open: true,
       title: deleteInfo.title,
-      message: deleteInfo.message,
+      message,
       confirmLabel: deleteInfo.hasDeleteWithoutWhere
         ? 'Yes, delete all rows'
         : 'Yes, run DELETE',
@@ -245,7 +287,11 @@ export default function Home() {
       }
     };
 
-    if (requestDeleteConfirmation([query1, query2], executeActiveTabs)) {
+    const connectionNames = [
+      connectionsById[resolved.connectionId1],
+      connectionsById[resolved.connectionId2],
+    ].filter(Boolean);
+    if (requestDeleteConfirmation([query1, query2], executeActiveTabs, connectionNames)) {
       return;
     }
 
@@ -333,7 +379,11 @@ export default function Home() {
       }
     };
 
-    if (requestDeleteConfirmation([query1, query2], reExecuteCompare)) {
+    const connectionNames = [
+      connectionsById[resolved.connectionId1],
+      connectionsById[resolved.connectionId2],
+    ].filter(Boolean);
+    if (requestDeleteConfirmation([query1, query2], reExecuteCompare, connectionNames)) {
       return;
     }
 
@@ -584,7 +634,8 @@ export default function Home() {
       }
     };
 
-    if (requestDeleteConfirmation([query], executeSavedQuery)) {
+    const connectionNames = selectedConnection?.name ? [selectedConnection.name] : [];
+    if (requestDeleteConfirmation([query], executeSavedQuery, connectionNames)) {
       return;
     }
 
@@ -637,6 +688,11 @@ export default function Home() {
           onExportCompare={handleExportCompare}
           onReExecuteCompare={handleReExecuteCompare}
           onOpenCompareFieldsModal={() => setShowCompareFieldsModal(true)}
+          onCloseCompareResults={() => {
+            setCompareMode(false);
+            setCompareKey('');
+            setCompareFields([]);
+          }}
           isLoadingResult1={isLoadingResult1}
           isLoadingResult2={isLoadingResult2}
           onStartResizeResults={(e) => {

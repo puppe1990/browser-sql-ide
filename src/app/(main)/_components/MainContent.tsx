@@ -33,6 +33,7 @@ type MainContentProps = {
   onExportCompare: () => void;
   onReExecuteCompare: () => void;
   onOpenCompareFieldsModal: () => void;
+  onCloseCompareResults: () => void;
   isLoadingResult1: boolean;
   isLoadingResult2: boolean;
   onStartResizeResults: (e: MouseEvent) => void;
@@ -90,6 +91,7 @@ export default function MainContent({
   onExportCompare,
   onReExecuteCompare,
   onOpenCompareFieldsModal,
+  onCloseCompareResults,
   isLoadingResult1,
   isLoadingResult2,
   onStartResizeResults,
@@ -280,6 +282,7 @@ export default function MainContent({
             onExport={onExportCompare}
             onReExecute={onReExecuteCompare}
             onSelectFields={onOpenCompareFieldsModal}
+            onClose={onCloseCompareResults}
           />
         ) : (
           <div className="flex flex-row" style={{ height: `${queryResultsHeight}px`, minHeight: '200px', flexShrink: 0 }}>
