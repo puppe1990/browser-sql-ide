@@ -7,6 +7,8 @@ export type QueryResult = {
   totalCount?: number;
   executionTime: number;
   hasMore?: boolean;
+  connectionId?: number;
+  connectionName?: string;
 };
 
 export type FieldComparison = {

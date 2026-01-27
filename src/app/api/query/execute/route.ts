@@ -59,7 +59,11 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        result,
+        result: {
+          ...result,
+          connectionId: connection.id,
+          connectionName: connection.name,
+        },
       });
     } catch (error: unknown) {
       const errorMessage = getErrorMessage(error);

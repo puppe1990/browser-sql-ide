@@ -7,6 +7,7 @@ type ResultsHeaderProps = {
   expanded: boolean;
   rowCountText: string;
   executionTime: number;
+  connectionName?: string;
   onToggleExpand: () => void;
   onExportCsv: () => void;
   onExportSql: () => void;
@@ -19,6 +20,7 @@ export default function ResultsHeader({
   expanded,
   rowCountText,
   executionTime,
+  connectionName,
   onToggleExpand,
   onExportCsv,
   onExportSql,
@@ -34,6 +36,7 @@ export default function ResultsHeader({
         </h3>
         <span className="text-xs text-slate-500 dark:text-slate-400">
           {rowCountText} • {executionTime}ms
+          {connectionName ? ` • ${connectionName}` : ''}
         </span>
       </div>
       <div className="flex gap-1">

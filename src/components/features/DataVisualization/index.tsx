@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { FormEvent } from 'react';
 import { Loader2 } from 'lucide-react';
 import type { QueryResult, RowData } from '@/types';
@@ -35,6 +35,12 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const currentOffset = useRef(result.rows.length);
   const { connections, selectedConnectionId, setSelectedConnectionId } = useConnections({});
+  const connectionName = useMemo(() => {
+    if (result.connectionName) return result.connectionName;
+    const resolvedConnectionId = result.connectionId ?? connectionId ?? selectedConnectionId;
+    if (!resolvedConnectionId) return undefined;
+    return connections.find((connection) => connection.id === resolvedConnectionId)?.name;
+  }, [connections, connectionId, result.connectionId, result.connectionName, selectedConnectionId]);
 
   // Update state when result prop changes
   useEffect(() => {
@@ -183,7 +189,9 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
   if (!result || !result.columns || result.columns.length === 0) {
     return (
       <div className="h-full flex items-center justify-center bg-white dark:bg-slate-900">
-        <p className="text-slate-500 dark:text-slate-400 text-sm">No data to display</p>
+        <p className="text-slate-500 dark:text-slate-400 text-sm">
+          No data to display{connectionName ? ` for "${connectionName}"` : ''}
+        </p>
       </div>
     );
   }
@@ -198,6 +206,7 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
         expanded={expanded}
         rowCountText={rowCountText}
         executionTime={result.executionTime}
+        connectionName={connectionName}
         onToggleExpand={() => setExpanded(!expanded)}
         onExportCsv={() => exportToCsv(result.columns, allRows)}
         onExportSql={() => exportToInsertStatements(result.columns, allRows, query)}
