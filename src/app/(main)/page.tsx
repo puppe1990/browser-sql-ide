@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import type { ReactNode } from 'react';
+import { Loader2 } from 'lucide-react';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import Sidebar from './_components/Sidebar';
 import { getErrorMessage } from '@/lib/utils';
@@ -74,6 +75,7 @@ export default function Home() {
   });
   const [isReExecuting, setIsReExecuting] = useState(false);
   const [isExecutingActiveTabs, setIsExecutingActiveTabs] = useState(false);
+  const [isExportingCompare, setIsExportingCompare] = useState(false);
   const [savedQueries, setSavedQueries] = useState<{query1?: string, query2?: string}>({});
   const [activeQuery1, setActiveQuery1] = useState<string>('');
   const [activeQuery2, setActiveQuery2] = useState<string>('');
@@ -216,7 +218,7 @@ export default function Home() {
     const message = uniqueNames.length > 0 ? (
       <div>
         <div>{deleteInfo.message}</div>
-        <div className="mt-2 text-xs text-gray-500">
+        <div className="mt-2 text-sm font-medium text-white">
           Connection{uniqueNames.length > 1 ? 's' : ''}: {uniqueNames.join(', ')}
         </div>
       </div>
@@ -457,97 +459,104 @@ export default function Home() {
   }, [compareMode, compareKey, compareFields, queryResult, queryResult2]);
 
   // Export comparison results to CSV
-  const handleExportCompare = () => {
+  const handleExportCompare = async () => {
     if (!comparedResults || comparedResults.length === 0) {
       alert('No comparison results to export');
       return;
     }
 
-    // Build CSV headers
-    const headers = [
-      'Key Value',
-      'Status',
-      'Left Count',
-      'Right Count'
-    ];
+    setIsExportingCompare(true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
-    // Add field comparison columns if fields are selected
-    if (compareFields.length > 0) {
-      compareFields.forEach(field => {
-        headers.push(`${field} (Left)`, `${field} (Right)`, `${field} (Match)`);
-      });
-    } else {
-      // Add all common columns from both results
-      const allColumns = new Set<string>();
-      if (queryResult && queryResult2) {
-        queryResult.columns.forEach(col => allColumns.add(col));
-        queryResult2.columns.forEach(col => allColumns.add(col));
-      }
-      allColumns.forEach(col => {
-        headers.push(`${col} (Left)`, `${col} (Right)`);
-      });
-    }
-
-    // Build CSV rows
-    const rows = comparedResults.map((item) => {
-      const row: string[] = [
-        String(item.key || '(null)'),
-        item.status,
-        String(item.leftRows.length),
-        String(item.rightRows.length)
+    try {
+      // Build CSV headers
+      const headers = [
+        'Key Value',
+        'Status',
+        'Left Count',
+        'Right Count'
       ];
 
+      // Add field comparison columns if fields are selected
       if (compareFields.length > 0) {
-        // Export field comparisons
         compareFields.forEach(field => {
-          const comparison = item.fieldComparisons?.[field];
-          if (comparison) {
-            const leftValue = comparison.left ?? 'NULL';
-            const rightValue = comparison.right ?? 'NULL';
-            const match = comparison.match ? 'Yes' : 'No';
-            row.push(
-              String(leftValue).replace(/"/g, '""'),
-              String(rightValue).replace(/"/g, '""'),
-              match
-            );
-          } else {
-            row.push('N/A', 'N/A', 'N/A');
-          }
+          headers.push(`${field} (Left)`, `${field} (Right)`, `${field} (Match)`);
         });
       } else {
-        // Export all columns from first row of each side
+        // Add all common columns from both results
         const allColumns = new Set<string>();
         if (queryResult && queryResult2) {
           queryResult.columns.forEach(col => allColumns.add(col));
           queryResult2.columns.forEach(col => allColumns.add(col));
         }
         allColumns.forEach(col => {
-          const leftValue = item.leftRows[0]?.[col] ?? 'NULL';
-          const rightValue = item.rightRows[0]?.[col] ?? 'NULL';
-          row.push(
-            String(leftValue).replace(/"/g, '""'),
-            String(rightValue).replace(/"/g, '""')
-          );
+          headers.push(`${col} (Left)`, `${col} (Right)`);
         });
       }
 
-      return row;
-    });
+      // Build CSV rows
+      const rows = comparedResults.map((item) => {
+        const row: string[] = [
+          String(item.key || '(null)'),
+          item.status,
+          String(item.leftRows.length),
+          String(item.rightRows.length)
+        ];
 
-    // Convert to CSV format
-    const csvContent = [
-      headers.map(h => `"${h.replace(/"/g, '""')}"`).join(','),
-      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
-    ].join('\n');
+        if (compareFields.length > 0) {
+          // Export field comparisons
+          compareFields.forEach(field => {
+            const comparison = item.fieldComparisons?.[field];
+            if (comparison) {
+              const leftValue = comparison.left ?? 'NULL';
+              const rightValue = comparison.right ?? 'NULL';
+              const match = comparison.match ? 'Yes' : 'No';
+              row.push(
+                String(leftValue).replace(/"/g, '""'),
+                String(rightValue).replace(/"/g, '""'),
+                match
+              );
+            } else {
+              row.push('N/A', 'N/A', 'N/A');
+            }
+          });
+        } else {
+          // Export all columns from first row of each side
+          const allColumns = new Set<string>();
+          if (queryResult && queryResult2) {
+            queryResult.columns.forEach(col => allColumns.add(col));
+            queryResult2.columns.forEach(col => allColumns.add(col));
+          }
+          allColumns.forEach(col => {
+            const leftValue = item.leftRows[0]?.[col] ?? 'NULL';
+            const rightValue = item.rightRows[0]?.[col] ?? 'NULL';
+            row.push(
+              String(leftValue).replace(/"/g, '""'),
+              String(rightValue).replace(/"/g, '""')
+            );
+          });
+        }
 
-    // Create and download file
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `comparison_${compareKey}_${Date.now()}.csv`;
-    a.click();
-    window.URL.revokeObjectURL(url);
+        return row;
+      });
+
+      // Convert to CSV format
+      const csvContent = [
+        headers.map(h => `"${h.replace(/"/g, '""')}"`).join(','),
+        ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+      ].join('\n');
+
+      // Create and download file
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `comparison_${compareKey}_${Date.now()}.csv`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } finally {
+      setIsExportingCompare(false);
+    }
   };
 
   const handleQuerySave = async (query: string) => {
@@ -772,6 +781,15 @@ export default function Home() {
           }}
         />
       </div>
+
+      {isExportingCompare && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-white/70 dark:bg-slate-900/70 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-3">
+            <Loader2 className="w-8 h-8 animate-spin text-blue-600 dark:text-blue-400" />
+            <p className="text-slate-600 dark:text-slate-300 text-sm">Exporting...</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -268,7 +268,7 @@ export default function QueryEditor({
       const message = connectionName ? (
         <div>
           <div>{deleteInfo.message}</div>
-          <div className="mt-2 text-xs text-gray-500">Connection: {connectionName}</div>
+          <div className="mt-2 text-sm font-medium text-white">Connection: {connectionName}</div>
         </div>
       ) : deleteInfo.message;
 

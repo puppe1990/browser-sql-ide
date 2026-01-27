@@ -34,6 +34,7 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
   const [insertTableName, setInsertTableName] = useState('');
   const [isInserting, setIsInserting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const currentOffset = useRef(result.rows.length);
@@ -118,6 +119,13 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
   const canInsert = allRows.length > 0 && result.columns.length > 0;
   const insertCountIsExact = totalCount !== undefined || !hasMore;
   const insertCount = totalCount !== undefined ? totalCount : allRows.length;
+  const overlayMessage = isExporting
+    ? 'Exporting...'
+    : isImporting
+      ? 'Importing...'
+      : isInserting
+        ? 'Inserting...'
+        : null;
 
   const fetchAllRowsForInsert = useCallback(async () => {
     if (!hasMore) return allRows;
@@ -238,6 +246,56 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
     [selectedConnectionId, insertTableName, canInsert, result.columns, allRows, hasMore, fetchAllRowsForInsert]
   );
 
+  const handleExportCsv = useCallback(async () => {
+    if (!canInsert) {
+      alert('Nenhuma linha disponível para exportar');
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      let rowsToExport = allRows;
+      if (hasMore) {
+        try {
+          rowsToExport = await fetchAllRowsForInsert();
+        } catch (error) {
+          console.error('Failed to load all rows:', error);
+          alert('Falha ao carregar todas as linhas antes de exportar');
+          return;
+        }
+      }
+
+      exportToCsv(result.columns, rowsToExport);
+    } finally {
+      setIsExporting(false);
+    }
+  }, [canInsert, allRows, hasMore, fetchAllRowsForInsert, result.columns]);
+
+  const handleExportSql = useCallback(async () => {
+    if (!canInsert) {
+      alert('Nenhuma linha disponível para exportar');
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      let rowsToExport = allRows;
+      if (hasMore) {
+        try {
+          rowsToExport = await fetchAllRowsForInsert();
+        } catch (error) {
+          console.error('Failed to load all rows:', error);
+          alert('Falha ao carregar todas as linhas antes de exportar');
+          return;
+        }
+      }
+
+      exportToInsertStatements(result.columns, rowsToExport, query);
+    } finally {
+      setIsExporting(false);
+    }
+  }, [canInsert, allRows, hasMore, fetchAllRowsForInsert, result.columns, query]);
+
   const handleExportInsert = useCallback(async () => {
     const trimmedTable = insertTableName.trim();
     if (!trimmedTable) {
@@ -250,30 +308,35 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
       return;
     }
 
-    let rowsToExport = allRows;
-    if (hasMore) {
-      try {
-        rowsToExport = await fetchAllRowsForInsert();
-      } catch (error) {
-        console.error('Failed to load all rows:', error);
-        alert('Failed to load all rows before exporting');
+    setIsExporting(true);
+    try {
+      let rowsToExport = allRows;
+      if (hasMore) {
+        try {
+          rowsToExport = await fetchAllRowsForInsert();
+        } catch (error) {
+          console.error('Failed to load all rows:', error);
+          alert('Failed to load all rows before exporting');
+          return;
+        }
+      }
+
+      const insertQuery = buildInsertQuery(result.columns, rowsToExport, trimmedTable);
+      if (!insertQuery) {
+        alert('Failed to build insert query');
         return;
       }
-    }
 
-    const insertQuery = buildInsertQuery(result.columns, rowsToExport, trimmedTable);
-    if (!insertQuery) {
-      alert('Failed to build insert query');
-      return;
+      const blob = new Blob([insertQuery], { type: 'text/plain' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `inserts_${trimmedTable}_${Date.now()}.sql`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } finally {
+      setIsExporting(false);
     }
-
-    const blob = new Blob([insertQuery], { type: 'text/plain' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `inserts_${trimmedTable}_${Date.now()}.sql`;
-    a.click();
-    window.URL.revokeObjectURL(url);
   }, [insertTableName, canInsert, allRows, hasMore, fetchAllRowsForInsert, result.columns]);
 
   const handleImportInserts = useCallback(() => {
@@ -390,7 +453,7 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
 
   return (
     <div
-      className={`h-full flex flex-col bg-white dark:bg-slate-900 overflow-hidden ${
+      className={`h-full flex flex-col bg-white dark:bg-slate-900 overflow-hidden relative ${
         expanded ? 'fixed inset-4 z-50' : ''
       }`}
     >
@@ -407,12 +470,13 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
         executionTime={result.executionTime}
         connectionName={connectionName}
         onToggleExpand={() => setExpanded(!expanded)}
-        onExportCsv={() => exportToCsv(result.columns, allRows)}
-        onExportSql={() => exportToInsertStatements(result.columns, allRows, query)}
+        onExportCsv={handleExportCsv}
+        onExportSql={handleExportSql}
         onImportInserts={handleImportInserts}
         onInsertToConnection={() => setShowInsertModal(true)}
         canInsert={canInsert}
         isInserting={isInserting || isImporting}
+        isExporting={isExporting}
       />
 
       <div ref={scrollContainerRef} className="flex-1 overflow-auto relative">
@@ -439,6 +503,15 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
         onExportInsert={handleExportInsert}
         onClose={() => setShowInsertModal(false)}
       />
+
+      {overlayMessage && (
+        <div className="absolute inset-0 z-40 flex items-center justify-center bg-white/70 dark:bg-slate-900/70 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-3">
+            <Loader2 className="w-8 h-8 animate-spin text-blue-600 dark:text-blue-400" />
+            <p className="text-slate-600 dark:text-slate-300 text-sm">{overlayMessage}</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

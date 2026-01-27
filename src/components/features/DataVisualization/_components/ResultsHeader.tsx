@@ -15,6 +15,7 @@ type ResultsHeaderProps = {
   onInsertToConnection: () => void;
   canInsert: boolean;
   isInserting: boolean;
+  isExporting: boolean;
 };
 
 export default function ResultsHeader({
@@ -29,6 +30,7 @@ export default function ResultsHeader({
   onInsertToConnection,
   canInsert,
   isInserting,
+  isExporting,
 }: ResultsHeaderProps) {
   return (
     <div className="flex justify-between items-center px-4 py-2.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 relative z-10">
@@ -66,7 +68,12 @@ export default function ResultsHeader({
         <Tooltip text="Exportar para CSV">
           <button
             onClick={onExportCsv}
-            className="p-1.5 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition-colors"
+            disabled={isExporting}
+            className={`p-1.5 rounded transition-colors ${
+              isExporting
+                ? 'text-slate-400 dark:text-slate-600 cursor-not-allowed'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'
+            }`}
           >
             <Download className="w-3.5 h-3.5" />
           </button>
@@ -74,7 +81,12 @@ export default function ResultsHeader({
         <Tooltip text="Exportar como INSERT statements">
           <button
             onClick={onExportSql}
-            className="p-1.5 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition-colors"
+            disabled={isExporting}
+            className={`p-1.5 rounded transition-colors ${
+              isExporting
+                ? 'text-slate-400 dark:text-slate-600 cursor-not-allowed'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'
+            }`}
           >
             <Database className="w-3.5 h-3.5" />
           </button>
