@@ -3,6 +3,21 @@
 import { Download, RefreshCw, X } from 'lucide-react';
 import type { ComparisonResult } from '@/types';
 
+const parseNumericValue = (value: unknown) => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+};
+
 type CompareResultsPanelProps = {
   height: number;
   compareKey: string;
@@ -138,6 +153,9 @@ export default function CompareResultsPanel({
                       );
                     }
                     const isMatch = comparison.match;
+                    const leftNumber = parseNumericValue(comparison.left);
+                    const rightNumber = parseNumericValue(comparison.right);
+                    const diff = leftNumber !== null && rightNumber !== null ? leftNumber - rightNumber : null;
                     return (
                       <td key={field} className="px-3 py-2 text-xs">
                         <div className={`p-2 rounded ${isMatch ? 'bg-green-50 dark:bg-green-900/20' : 'bg-red-50 dark:bg-red-900/20'}`}>
@@ -161,6 +179,12 @@ export default function CompareResultsPanel({
                               </div>
                             </div>
                           </div>
+                          {diff !== null ? (
+                            <div className="mt-2 text-xs text-slate-600 dark:text-slate-300">
+                              <span className="text-slate-500 dark:text-slate-400">Diff (L - R):</span>
+                              <span className="font-mono ml-1">{String(diff)}</span>
+                            </div>
+                          ) : null}
                         </div>
                       </td>
                     );
