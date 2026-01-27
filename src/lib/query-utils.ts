@@ -160,3 +160,72 @@ export function addDefaultLimit(query: string): string {
   
   return hasSemicolon ? `${queryWithLimit};` : queryWithLimit;
 }
+
+type DeleteConfirmationInfo = {
+  hasDelete: boolean;
+  hasDeleteWithoutWhere: boolean;
+  title: string;
+  message: string;
+};
+
+function stripSqlComments(query: string): string {
+  const withoutBlock = query.replace(/\/\*[\s\S]*?\*\//g, ' ');
+  return withoutBlock.replace(/--.*$/gm, ' ');
+}
+
+export function getDeleteConfirmationInfo(query: string): DeleteConfirmationInfo {
+  if (!query) {
+    return {
+      hasDelete: false,
+      hasDeleteWithoutWhere: false,
+      title: '',
+      message: '',
+    };
+  }
+
+  const normalized = stripSqlComments(query);
+  const statements = normalized
+    .split(/;+/)
+    .map((statement) => statement.trim())
+    .filter(Boolean);
+
+  let hasDelete = false;
+  let hasDeleteWithoutWhere = false;
+
+  for (const statement of statements) {
+    const upperStatement = statement.toUpperCase();
+    const deleteIndex = upperStatement.search(/\bDELETE\b/);
+    if (deleteIndex === -1) continue;
+    hasDelete = true;
+    const afterDelete = upperStatement.slice(deleteIndex);
+    if (!/\bWHERE\b/.test(afterDelete)) {
+      hasDeleteWithoutWhere = true;
+    }
+  }
+
+  if (!hasDelete) {
+    return {
+      hasDelete: false,
+      hasDeleteWithoutWhere: false,
+      title: '',
+      message: '',
+    };
+  }
+
+  if (hasDeleteWithoutWhere) {
+    return {
+      hasDelete: true,
+      hasDeleteWithoutWhere: true,
+      title: 'Danger: DELETE without WHERE',
+      message:
+        'This query includes a DELETE without a WHERE clause. That will remove ALL rows from the target table. This is destructive and cannot be undone. Are you absolutely sure?',
+    };
+  }
+
+  return {
+    hasDelete: true,
+    hasDeleteWithoutWhere: false,
+    title: 'Confirm DELETE',
+    message: 'You are about to run a DELETE statement. Are you sure you want to continue?',
+  };
+}

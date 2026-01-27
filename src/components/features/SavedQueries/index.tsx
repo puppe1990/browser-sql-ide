@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import type { FormEvent } from 'react';
+import ConfirmModal from '@/components/ui/ConfirmModal';
 import SavedQueriesHeader from './_components/SavedQueriesHeader';
 import SavedQueriesList from './_components/SavedQueriesList';
 import SavedQueryModal from './_components/SavedQueryModal';
@@ -22,6 +23,10 @@ export default function SavedQueries({
   const [queries, setQueries] = useState<SavedQuery[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [editingQuery, setEditingQuery] = useState<SavedQuery | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; queryId: number | null }>({
+    open: false,
+    queryId: null,
+  });
   const [formData, setFormData] = useState<SavedQueryFormData>({
     name: '',
     query: '',
@@ -76,8 +81,6 @@ export default function SavedQueries({
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this query?')) return;
-
     try {
       const response = await fetch(`/api/queries/${id}`, {
         method: 'DELETE',
@@ -92,6 +95,25 @@ export default function SavedQueries({
       console.error('Failed to delete query:', error);
       alert('Failed to delete query');
     }
+  };
+
+  const requestDelete = (id: number) => {
+    setDeleteConfirm({ open: true, queryId: id });
+  };
+
+  const closeDeleteConfirm = () => {
+    setDeleteConfirm({ open: false, queryId: null });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirm.queryId) {
+      closeDeleteConfirm();
+      return;
+    }
+
+    const id = deleteConfirm.queryId;
+    closeDeleteConfirm();
+    await handleDelete(id);
   };
 
   const handleEdit = (query: SavedQuery) => {
@@ -161,7 +183,7 @@ export default function SavedQueries({
         onQueryExecute={onQueryExecute}
         onEdit={handleEdit}
         onDuplicate={handleDuplicate}
-        onDelete={handleDelete}
+        onDelete={requestDelete}
       />
 
       <SavedQueryModal
@@ -174,6 +196,16 @@ export default function SavedQueries({
           setShowModal(false);
           resetForm();
         }}
+      />
+
+      <ConfirmModal
+        open={deleteConfirm.open}
+        title="Delete saved query?"
+        message="This saved query will be permanently removed. Are you sure you want to continue?"
+        confirmLabel="Delete query"
+        confirmTone="danger"
+        onCancel={closeDeleteConfirm}
+        onConfirm={confirmDelete}
       />
     </div>
   );

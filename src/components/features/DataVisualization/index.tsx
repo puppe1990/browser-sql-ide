@@ -1,15 +1,20 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import type { FormEvent } from 'react';
 import { Loader2 } from 'lucide-react';
 import type { QueryResult, RowData } from '@/types';
 import ResultsHeader from './_components/ResultsHeader';
 import ResultsTable from './_components/ResultsTable';
+import InsertIntoConnectionModal from './_components/InsertIntoConnectionModal';
 import {
+  buildInsertQuery,
+  extractTableName,
   exportToCsv,
   exportToInsertStatements,
   getRowCountText,
 } from './utils';
+import { useConnections } from '@/components/features/QueryEditor/helpers';
 
 interface DataVisualizationProps {
   result: QueryResult;
@@ -24,8 +29,12 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(result.hasMore ?? false);
   const [totalCount, setTotalCount] = useState(result.totalCount);
+  const [showInsertModal, setShowInsertModal] = useState(false);
+  const [insertTableName, setInsertTableName] = useState('');
+  const [isInserting, setIsInserting] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const currentOffset = useRef(result.rows.length);
+  const { connections, selectedConnectionId, setSelectedConnectionId } = useConnections({});
 
   // Update state when result prop changes
   useEffect(() => {
@@ -34,6 +43,12 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
     setTotalCount(result.totalCount);
     currentOffset.current = result.rows.length;
   }, [result]);
+
+  useEffect(() => {
+    if (!showInsertModal) {
+      setInsertTableName(extractTableName(query));
+    }
+  }, [query, showInsertModal]);
 
   const loadMore = useCallback(async () => {
     if (!connectionId || !query || isLoadingMore || !hasMore) {
@@ -87,6 +102,62 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
   }, [hasMore, isLoadingMore, loadMore]);
 
   const rowCountText = getRowCountText(totalCount, allRows.length);
+  const canInsert = allRows.length > 0 && result.columns.length > 0;
+
+  const handleInsertSubmit = useCallback(
+    async (event: FormEvent) => {
+      event.preventDefault();
+
+      if (!selectedConnectionId) {
+        alert('Please select a target connection');
+        return;
+      }
+
+      const trimmedTable = insertTableName.trim();
+      if (!trimmedTable) {
+        alert('Please provide a target table name');
+        return;
+      }
+
+      if (!canInsert) {
+        alert('No rows available to insert');
+        return;
+      }
+
+      const insertQuery = buildInsertQuery(result.columns, allRows, trimmedTable);
+      if (!insertQuery) {
+        alert('Failed to build insert query');
+        return;
+      }
+
+      setIsInserting(true);
+      try {
+        const response = await fetch('/api/query/execute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            connectionId: selectedConnectionId,
+            query: insertQuery,
+          }),
+        });
+
+        const data = await response.json();
+        if (data.success) {
+          const insertedCount = data.result?.rowCount ?? allRows.length;
+          alert(`Inserted ${insertedCount} row${insertedCount === 1 ? '' : 's'} into ${trimmedTable}.`);
+          setShowInsertModal(false);
+        } else {
+          alert(data.error || 'Insert failed');
+        }
+      } catch (error) {
+        console.error('Failed to insert data:', error);
+        alert('Failed to insert data');
+      } finally {
+        setIsInserting(false);
+      }
+    },
+    [selectedConnectionId, insertTableName, canInsert, result.columns, allRows]
+  );
 
   // Show loading spinner
   if (isLoading) {
@@ -130,6 +201,9 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
         onToggleExpand={() => setExpanded(!expanded)}
         onExportCsv={() => exportToCsv(result.columns, allRows)}
         onExportSql={() => exportToInsertStatements(result.columns, allRows, query)}
+        onInsertToConnection={() => setShowInsertModal(true)}
+        canInsert={canInsert}
+        isInserting={isInserting}
       />
 
       <div ref={scrollContainerRef} className="flex-1 overflow-auto relative">
@@ -140,6 +214,19 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
           hasMore={hasMore}
         />
       </div>
+
+      <InsertIntoConnectionModal
+        open={showInsertModal}
+        connections={connections}
+        selectedConnectionId={selectedConnectionId}
+        tableName={insertTableName}
+        rowCount={allRows.length}
+        isSubmitting={isInserting}
+        onConnectionChange={setSelectedConnectionId}
+        onTableNameChange={setInsertTableName}
+        onSubmit={handleInsertSubmit}
+        onClose={() => setShowInsertModal(false)}
+      />
     </div>
   );
 }

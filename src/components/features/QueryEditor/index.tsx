@@ -2,7 +2,9 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
+import ConfirmModal from '@/components/ui/ConfirmModal';
 import { getErrorMessage } from '@/lib/utils';
+import { getDeleteConfirmationInfo } from '@/lib/query-utils';
 import type { QueryResult } from '@/types';
 import type * as Monaco from 'monaco-editor';
 import EditorHeader from './_components/EditorHeader';
@@ -53,6 +55,14 @@ export default function QueryEditor({
   const [result, setResult] = useState<QueryResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [errorLine, setErrorLine] = useState<number | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState({
+    open: false,
+    query: '',
+    title: '',
+    message: '',
+    confirmLabel: 'Confirm',
+    confirmTone: 'primary' as 'primary' | 'danger',
+  });
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof Monaco | null>(null);
   const isExecutingRef = useRef(false);
@@ -163,9 +173,11 @@ export default function QueryEditor({
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, executeCommand);
   };
 
-  const handleExecute = async (queryToExecute?: string) => {
-    const queryValue = queryToExecute ?? getQueryFromEditor(editorRef.current, query);
-    
+  const closeDeleteConfirm = () => {
+    setDeleteConfirm((prev) => ({ ...prev, open: false }));
+  };
+
+  const executeQuery = async (queryValue: string) => {
     const connectionToUse = selectedConnectionId || connectionId;
     if (!connectionToUse) {
       alert('Please select a connection first');
@@ -215,6 +227,27 @@ export default function QueryEditor({
     } finally {
       setIsExecuting(false);
     }
+  };
+
+  const handleExecute = async (queryToExecute?: string) => {
+    const queryValue = queryToExecute ?? getQueryFromEditor(editorRef.current, query);
+    
+    const deleteInfo = getDeleteConfirmationInfo(queryValue);
+    if (deleteInfo.hasDelete) {
+      setDeleteConfirm({
+        open: true,
+        query: queryValue,
+        title: deleteInfo.title,
+        message: deleteInfo.message,
+        confirmLabel: deleteInfo.hasDeleteWithoutWhere
+          ? 'Yes, delete all rows'
+          : 'Yes, run DELETE',
+        confirmTone: 'danger',
+      });
+      return;
+    }
+
+    await executeQuery(queryValue);
   };
 
   // Keep handleExecute ref in sync
@@ -267,6 +300,20 @@ export default function QueryEditor({
       </div>
 
       <EditorFooter error={error} errorLine={errorLine} result={result} />
+
+      <ConfirmModal
+        open={deleteConfirm.open}
+        title={deleteConfirm.title}
+        message={deleteConfirm.message}
+        confirmLabel={deleteConfirm.confirmLabel}
+        confirmTone={deleteConfirm.confirmTone}
+        onCancel={closeDeleteConfirm}
+        onConfirm={() => {
+          const pendingQuery = deleteConfirm.query;
+          closeDeleteConfirm();
+          executeQuery(pendingQuery);
+        }}
+      />
     </div>
   );
 }

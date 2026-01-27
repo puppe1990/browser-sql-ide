@@ -87,6 +87,21 @@ export function exportToInsertStatements(
   window.URL.revokeObjectURL(url);
 }
 
+export function buildInsertQuery(
+  columns: string[],
+  rows: RowData[],
+  tableName: string
+): string {
+  if (!rows.length) return '';
+
+  const values = rows.map((row) => {
+    const escapedValues = columns.map((col) => escapeSqlValue(row[col]));
+    return `(${escapedValues.join(', ')})`;
+  });
+
+  return `INSERT INTO ${tableName} (${columns.join(', ')}) VALUES\n${values.join(',\n')};`;
+}
+
 export function formatCellValue(value: unknown) {
   if (value === null || value === undefined) {
     return { displayValue: 'NULL', cellClass: 'text-slate-400 dark:text-slate-500 italic' };

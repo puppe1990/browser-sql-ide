@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { ChangeEvent, FormEvent } from 'react';
 import { Download, Plus, Upload } from 'lucide-react';
+import ConfirmModal from '@/components/ui/ConfirmModal';
 import { getErrorMessage } from '@/lib/utils';
 import ConnectionFormModal from './_components/ConnectionFormModal';
 import ConnectionList from './_components/ConnectionList';
@@ -25,6 +26,10 @@ export default function ConnectionManager({
   const [showModal, setShowModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [editingConnection, setEditingConnection] = useState<Connection | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; connectionId: number | null }>({
+    open: false,
+    connectionId: null,
+  });
   const [testing, setTesting] = useState<number | null>(null);
   const [testingForm, setTestingForm] = useState(false);
   const [testResult, setTestResult] = useState<TestResult>(null);
@@ -115,8 +120,6 @@ export default function ConnectionManager({
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this connection?')) return;
-
     try {
       const response = await fetch(`/api/connections/${id}`, {
         method: 'DELETE',
@@ -132,6 +135,25 @@ export default function ConnectionManager({
       console.error('Failed to delete connection:', error);
       alert('Failed to delete connection');
     }
+  };
+
+  const requestDelete = (id: number) => {
+    setDeleteConfirm({ open: true, connectionId: id });
+  };
+
+  const closeDeleteConfirm = () => {
+    setDeleteConfirm({ open: false, connectionId: null });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirm.connectionId) {
+      closeDeleteConfirm();
+      return;
+    }
+
+    const id = deleteConfirm.connectionId;
+    closeDeleteConfirm();
+    await handleDelete(id);
   };
 
   const handleTest = async (connection: Connection) => {
@@ -376,7 +398,7 @@ export default function ConnectionManager({
         onSetDefault={handleSetDefault}
         onTest={handleTest}
         onEdit={handleEdit}
-        onDelete={handleDelete}
+        onDelete={requestDelete}
       />
 
       <ConnectionFormModal
@@ -405,6 +427,16 @@ export default function ConnectionManager({
           setImportJson('');
         }}
         onImport={handleImport}
+      />
+
+      <ConfirmModal
+        open={deleteConfirm.open}
+        title="Delete connection?"
+        message="This connection will be permanently removed. Are you sure you want to continue?"
+        confirmLabel="Delete connection"
+        confirmTone="danger"
+        onCancel={closeDeleteConfirm}
+        onConfirm={confirmDelete}
       />
     </div>
   );

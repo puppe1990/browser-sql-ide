@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
+import ConfirmModal from '@/components/ui/ConfirmModal';
 import Sidebar from './_components/Sidebar';
 import { getErrorMessage } from '@/lib/utils';
+import { getDeleteConfirmationInfo, processQuery } from '@/lib/query-utils';
 import type { ComparisonResult, RowData } from '@/types';
 import type { Connection, QueryResultWithMeta } from './types';
 import MainContent from './_components/MainContent';
@@ -28,6 +30,15 @@ const parsePositiveNumber = (raw: string) => parseNumberInRange(raw, { minExclus
 const parseSplitWidth = (raw: string) =>
   parseNumberInRange(raw, { minExclusive: 0, maxExclusive: 100 });
 
+type DeleteConfirmState = {
+  open: boolean;
+  title: string;
+  message: string;
+  confirmLabel: string;
+  confirmTone: 'primary' | 'danger';
+  onConfirm: (() => void | Promise<void>) | null;
+};
+
 export default function Home() {
   const [selectedConnection, setSelectedConnection] = useState<Connection | null>(null);
   const [queryResult, setQueryResult] = useState<QueryResultWithMeta | null>(null);
@@ -52,6 +63,14 @@ export default function Home() {
   const [compareFields, setCompareFields] = useState<string[]>([]);
   const [showCompareModal, setShowCompareModal] = useState(false);
   const [showCompareFieldsModal, setShowCompareFieldsModal] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState>({
+    open: false,
+    title: '',
+    message: '',
+    confirmLabel: 'Confirm',
+    confirmTone: 'primary',
+    onConfirm: null,
+  });
   const [isReExecuting, setIsReExecuting] = useState(false);
   const [isExecutingActiveTabs, setIsExecutingActiveTabs] = useState(false);
   const [savedQueries, setSavedQueries] = useState<{query1?: string, query2?: string}>({});
@@ -147,6 +166,28 @@ export default function Home() {
     }
   };
 
+  const closeDeleteConfirm = () => {
+    setDeleteConfirm((prev) => ({ ...prev, open: false, onConfirm: null }));
+  };
+
+  const requestDeleteConfirmation = (queries: string[], onConfirm: () => void) => {
+    const deleteInfo = getDeleteConfirmationInfo(queries.join(';\n'));
+    if (!deleteInfo.hasDelete) return false;
+
+    setDeleteConfirm({
+      open: true,
+      title: deleteInfo.title,
+      message: deleteInfo.message,
+      confirmLabel: deleteInfo.hasDeleteWithoutWhere
+        ? 'Yes, delete all rows'
+        : 'Yes, run DELETE',
+      confirmTone: 'danger',
+      onConfirm,
+    });
+
+    return true;
+  };
+
 
   // Execute queries from active tabs in split screen
   const handleExecuteActiveTabs = async () => {
@@ -169,32 +210,40 @@ export default function Home() {
       return;
     }
 
-    setIsExecutingActiveTabs(true);
-    setIsLoadingResult1(true);
-    setIsLoadingResult2(true);
+    const executeActiveTabs = async () => {
+      setIsExecutingActiveTabs(true);
+      setIsLoadingResult1(true);
+      setIsLoadingResult2(true);
 
-    try {
-      // Execute both queries in parallel with their respective connections
-      const executedResults = await executeQueries([
-        { query: query1, connectionId: resolved.connectionId1 },
-        { query: query2, connectionId: resolved.connectionId2 },
-      ]);
-      
-      // Update results
-      setQueryResult(executedResults[0]);
-      setQueryResult2(executedResults[1]);
-      setIsLoadingResult1(false);
-      setIsLoadingResult2(false);
-      
-      // Save queries
-      setSavedQueries({ query1: executedResults[0].query, query2: executedResults[1].query });
-    } catch (error: unknown) {
-      setIsLoadingResult1(false);
-      setIsLoadingResult2(false);
-      alert(`Failed to execute queries: ${getErrorMessage(error) || 'Unknown error'}`);
-    } finally {
-      setIsExecutingActiveTabs(false);
+      try {
+        // Execute both queries in parallel with their respective connections
+        const executedResults = await executeQueries([
+          { query: query1, connectionId: resolved.connectionId1 },
+          { query: query2, connectionId: resolved.connectionId2 },
+        ]);
+        
+        // Update results
+        setQueryResult(executedResults[0]);
+        setQueryResult2(executedResults[1]);
+        setIsLoadingResult1(false);
+        setIsLoadingResult2(false);
+        
+        // Save queries
+        setSavedQueries({ query1: executedResults[0].query, query2: executedResults[1].query });
+      } catch (error: unknown) {
+        setIsLoadingResult1(false);
+        setIsLoadingResult2(false);
+        alert(`Failed to execute queries: ${getErrorMessage(error) || 'Unknown error'}`);
+      } finally {
+        setIsExecutingActiveTabs(false);
+      }
+    };
+
+    if (requestDeleteConfirmation([query1, query2], executeActiveTabs)) {
+      return;
     }
+
+    await executeActiveTabs();
   };
 
   // Re-execute both queries with same filters
@@ -225,56 +274,64 @@ export default function Home() {
       return;
     }
 
-    setIsReExecuting(true);
-    setIsLoadingResult1(true);
-    setIsLoadingResult2(true);
-    
-    // Store current filters to restore them after re-execution
-    const savedCompareKey = compareKey;
-    const savedCompareFields = [...compareFields];
-    const savedCompareMode = compareMode;
+    const reExecuteCompare = async () => {
+      setIsReExecuting(true);
+      setIsLoadingResult1(true);
+      setIsLoadingResult2(true);
+      
+      // Store current filters to restore them after re-execution
+      const savedCompareKey = compareKey;
+      const savedCompareFields = [...compareFields];
+      const savedCompareMode = compareMode;
 
-    try {
-      // Execute both queries in parallel with their respective connections
-      const executedResults = await executeQueries([
-        { query: query1, connectionId: resolved.connectionId1 },
-        { query: query2, connectionId: resolved.connectionId2 },
-      ]);
-      
-      // Create completely new objects with new arrays to ensure React detects the change
-      const newResult1: QueryResultWithMeta = {
-        ...executedResults[0],
-        rows: [...executedResults[0].rows],
-        columns: [...executedResults[0].columns],
-      };
-      const newResult2: QueryResultWithMeta = {
-        ...executedResults[1],
-        rows: [...executedResults[1].rows],
-        columns: [...executedResults[1].columns],
-      };
-      
-      // Update results first
-      setQueryResult(newResult1);
-      setQueryResult2(newResult2);
-      setIsLoadingResult1(false);
-      setIsLoadingResult2(false);
-      
-      // Store compare mode restoration to be applied after results are updated
-      if (savedCompareMode) {
-        setPendingCompareRestore({
-          compareMode: true,
-          compareKey: savedCompareKey,
-          compareFields: savedCompareFields,
-        });
+      try {
+        // Execute both queries in parallel with their respective connections
+        const executedResults = await executeQueries([
+          { query: query1, connectionId: resolved.connectionId1 },
+          { query: query2, connectionId: resolved.connectionId2 },
+        ]);
+        
+        // Create completely new objects with new arrays to ensure React detects the change
+        const newResult1: QueryResultWithMeta = {
+          ...executedResults[0],
+          rows: [...executedResults[0].rows],
+          columns: [...executedResults[0].columns],
+        };
+        const newResult2: QueryResultWithMeta = {
+          ...executedResults[1],
+          rows: [...executedResults[1].rows],
+          columns: [...executedResults[1].columns],
+        };
+        
+        // Update results first
+        setQueryResult(newResult1);
+        setQueryResult2(newResult2);
+        setIsLoadingResult1(false);
+        setIsLoadingResult2(false);
+        
+        // Store compare mode restoration to be applied after results are updated
+        if (savedCompareMode) {
+          setPendingCompareRestore({
+            compareMode: true,
+            compareKey: savedCompareKey,
+            compareFields: savedCompareFields,
+          });
+        }
+      } catch (error: unknown) {
+        setIsLoadingResult1(false);
+        setIsLoadingResult2(false);
+        setPendingCompareRestore(null); // Clear pending restore on error
+        alert(`Failed to execute query: ${getErrorMessage(error) || 'Unknown error'}`);
+      } finally {
+        setIsReExecuting(false);
       }
-    } catch (error: unknown) {
-      setIsLoadingResult1(false);
-      setIsLoadingResult2(false);
-      setPendingCompareRestore(null); // Clear pending restore on error
-      alert(`Failed to execute query: ${getErrorMessage(error) || 'Unknown error'}`);
-    } finally {
-      setIsReExecuting(false);
+    };
+
+    if (requestDeleteConfirmation([query1, query2], reExecuteCompare)) {
+      return;
     }
+
+    await reExecuteCompare();
   };
 
   // Get common columns for comparison
@@ -490,34 +547,42 @@ export default function Home() {
       return;
     }
 
-    // Add query to a new tab and execute it
-    if (typeof window !== 'undefined' && window.addQueryToTab) {
-      window.addQueryToTab(query);
-    }
-    
-    // Process query to ensure complete lines with semicolons are considered
-    const processedQuery = processQuery(query);
-    
-    try {
-      const response = await fetch('/api/query/execute', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          connectionId: selectedConnection.id,
-          query: processedQuery,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        setQueryResult({ ...data.result, query: processedQuery });
-      } else {
-        alert(data.error || 'Query execution failed');
+    const executeSavedQuery = async () => {
+      // Add query to a new tab and execute it
+      if (typeof window !== 'undefined' && window.addQueryToTab) {
+        window.addQueryToTab(query);
       }
-    } catch (error: unknown) {
-      alert(getErrorMessage(error) || 'Failed to execute query');
+      
+      // Process query to ensure complete lines with semicolons are considered
+      const processedQuery = processQuery(query);
+      
+      try {
+        const response = await fetch('/api/query/execute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            connectionId: selectedConnection.id,
+            query: processedQuery,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          setQueryResult({ ...data.result, query: processedQuery });
+        } else {
+          alert(data.error || 'Query execution failed');
+        }
+      } catch (error: unknown) {
+        alert(getErrorMessage(error) || 'Failed to execute query');
+      }
+    };
+
+    if (requestDeleteConfirmation([query], executeSavedQuery)) {
+      return;
     }
+
+    await executeSavedQuery();
   };
 
   return (
@@ -626,6 +691,22 @@ export default function Home() {
           }}
           onDoneCompareFields={() => setShowCompareFieldsModal(false)}
           onCloseCompareFields={() => setShowCompareFieldsModal(false)}
+        />
+
+        <ConfirmModal
+          open={deleteConfirm.open}
+          title={deleteConfirm.title}
+          message={deleteConfirm.message}
+          confirmLabel={deleteConfirm.confirmLabel}
+          confirmTone={deleteConfirm.confirmTone}
+          onCancel={closeDeleteConfirm}
+          onConfirm={() => {
+            const action = deleteConfirm.onConfirm;
+            closeDeleteConfirm();
+            if (action) {
+              action();
+            }
+          }}
         />
       </div>
     </div>
