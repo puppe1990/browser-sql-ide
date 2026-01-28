@@ -20,6 +20,7 @@ export type FieldComparison = {
 
 export type ComparisonResult = {
   key: string;
+  keyValues: string[];
   leftRows: RowData[];
   rightRows: RowData[];
   status: 'match' | 'left-only' | 'right-only';

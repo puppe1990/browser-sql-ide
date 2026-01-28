@@ -27,7 +27,7 @@ type MainContentProps = {
   isExecutingActiveTabs: boolean;
   onExecuteActiveTabs: () => void;
   comparedResults: ComparisonResult[] | null;
-  compareKey: string;
+  compareKeys: string[];
   compareFields: string[];
   isReExecuting: boolean;
   onExportCompare: () => void;
@@ -60,7 +60,7 @@ type MainContentProps = {
   showCompareModal: boolean;
   showCompareFieldsModal: boolean;
   commonColumns: string[];
-  onCompareKeyChange: (value: string) => void;
+  onCompareKeyChange: (value: string[]) => void;
   onCancelCompareKey: () => void;
   onConfirmCompareKey: () => void;
   onToggleCompareField: (field: string, checked: boolean) => void;
@@ -86,7 +86,7 @@ export default function MainContent({
   isExecutingActiveTabs,
   onExecuteActiveTabs,
   comparedResults,
-  compareKey,
+  compareKeys,
   compareFields,
   isReExecuting,
   onExportCompare,
@@ -277,7 +277,7 @@ export default function MainContent({
         ) : compareMode && comparedResults ? (
           <CompareResultsPanel
             height={queryResultsHeight}
-            compareKey={compareKey}
+            compareKeys={compareKeys}
             compareFields={compareFields}
             comparedResults={comparedResults}
             isReExecuting={isReExecuting}
@@ -377,7 +377,7 @@ export default function MainContent({
 
       <CompareKeyModal
         open={showCompareModal}
-        compareKey={compareKey}
+        compareKeys={compareKeys}
         commonColumns={commonColumns}
         onCompareKeyChange={onCompareKeyChange}
         onCancel={onCancelCompareKey}
@@ -386,7 +386,7 @@ export default function MainContent({
 
       <CompareFieldsModal
         open={showCompareFieldsModal}
-        compareKey={compareKey}
+        compareKeys={compareKeys}
         commonColumns={commonColumns}
         compareFields={compareFields}
         onToggleField={onToggleCompareField}

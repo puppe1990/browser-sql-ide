@@ -61,7 +61,7 @@ export default function Home() {
     parseSplitWidth,
   ); // Percentage
   const [compareMode, setCompareMode] = useState(false);
-  const [compareKey, setCompareKey] = useState<string>('');
+  const [compareKeys, setCompareKeys] = useState<string[]>([]);
   const [compareFields, setCompareFields] = useState<string[]>([]);
   const [showCompareModal, setShowCompareModal] = useState(false);
   const [showCompareFieldsModal, setShowCompareFieldsModal] = useState(false);
@@ -99,7 +99,7 @@ export default function Home() {
   const [isResizingSplit, setIsResizingSplit] = useState(false);
   const [pendingCompareRestore, setPendingCompareRestore] = useState<{
     compareMode: boolean;
-    compareKey: string;
+    compareKeys: string[];
     compareFields: string[];
   } | null>(null);
   const editor1Ref = useRef<{ addQueryToTab: (query: string) => void } | null>(null);
@@ -163,7 +163,7 @@ export default function Home() {
       // Use requestAnimationFrame to ensure state updates happen after render
       requestAnimationFrame(() => {
         setCompareMode(pendingCompareRestore.compareMode);
-        setCompareKey(pendingCompareRestore.compareKey);
+        setCompareKeys(pendingCompareRestore.compareKeys);
         setCompareFields(pendingCompareRestore.compareFields);
         setPendingCompareRestore(null);
       });
@@ -197,7 +197,7 @@ export default function Home() {
     // Only disable compare mode when new results come in if not re-executing
     if (compareMode && !isReExecuting) {
       setCompareMode(false);
-      setCompareKey('');
+      setCompareKeys([]);
       setCompareFields([]);
     }
   };
@@ -344,7 +344,7 @@ export default function Home() {
       setIsLoadingResult2(true);
       
       // Store current filters to restore them after re-execution
-      const savedCompareKey = compareKey;
+      const savedCompareKeys = [...compareKeys];
       const savedCompareFields = [...compareFields];
       const savedCompareMode = compareMode;
 
@@ -377,7 +377,7 @@ export default function Home() {
         if (savedCompareMode) {
           setPendingCompareRestore({
             compareMode: true,
-            compareKey: savedCompareKey,
+            compareKeys: savedCompareKeys,
             compareFields: savedCompareFields,
           });
         }
@@ -410,26 +410,33 @@ export default function Home() {
 
   // Compare results based on selected key
   const comparedResults = useMemo<ComparisonResult[] | null>(() => {
-    if (!compareMode || !compareKey || !queryResult || !queryResult2) return null;
+    if (!compareMode || compareKeys.length === 0 || !queryResult || !queryResult2) return null;
 
-    const result1Map = new Map<string, RowData[]>();
-    const result2Map = new Map<string, RowData[]>();
+    const result1Map = new Map<string, { keyValues: string[]; rows: RowData[] }>();
+    const result2Map = new Map<string, { keyValues: string[]; rows: RowData[] }>();
 
-    // Index results by compare key
-    queryResult.rows.forEach((row: RowData) => {
-      const keyValue = String(row[compareKey] ?? '');
-      if (!result1Map.has(keyValue)) {
-        result1Map.set(keyValue, []);
+    const buildKeyValues = (row: RowData) => compareKeys.map((key) => String(row[key] ?? ''));
+    const addRowToMap = (
+      target: Map<string, { keyValues: string[]; rows: RowData[] }>,
+      keyValues: string[],
+      row: RowData,
+    ) => {
+      const signature = JSON.stringify(keyValues);
+      if (!target.has(signature)) {
+        target.set(signature, { keyValues, rows: [] });
       }
-      result1Map.get(keyValue).push(row);
+      target.get(signature)?.rows.push(row);
+    };
+
+    // Index results by compare keys (priority order)
+    queryResult.rows.forEach((row: RowData) => {
+      const keyValues = buildKeyValues(row);
+      addRowToMap(result1Map, keyValues, row);
     });
 
     queryResult2.rows.forEach((row: RowData) => {
-      const keyValue = String(row[compareKey] ?? '');
-      if (!result2Map.has(keyValue)) {
-        result2Map.set(keyValue, []);
-      }
-      result2Map.get(keyValue).push(row);
+      const keyValues = buildKeyValues(row);
+      addRowToMap(result2Map, keyValues, row);
     });
 
     // Get all unique keys
@@ -437,9 +444,15 @@ export default function Home() {
 
     // Create comparison result
     const compared: ComparisonResult[] = [];
-    allKeys.forEach(key => {
-      const rows1 = (result1Map.get(key) || []) as RowData[];
-      const rows2 = (result2Map.get(key) || []) as RowData[];
+    allKeys.forEach(signature => {
+      const leftEntry = result1Map.get(signature);
+      const rightEntry = result2Map.get(signature);
+      const rows1 = (leftEntry?.rows || []) as RowData[];
+      const rows2 = (rightEntry?.rows || []) as RowData[];
+      const keyValues = leftEntry?.keyValues || rightEntry?.keyValues || [];
+      const keyDisplay = compareKeys.length > 0
+        ? compareKeys.map((key, idx) => `${key}=${keyValues[idx] ?? ''}`).join(' | ')
+        : '';
       
       // Compare fields if selected
       const fieldComparisons: ComparisonResult['fieldComparisons'] = {};
@@ -456,7 +469,8 @@ export default function Home() {
       }
       
       compared.push({
-        key,
+        key: keyDisplay,
+        keyValues,
         leftRows: rows1,
         rightRows: rows2,
         status: rows1.length > 0 && rows2.length > 0 ? 'match' : 
@@ -466,7 +480,7 @@ export default function Home() {
     });
 
     return compared;
-  }, [compareMode, compareKey, compareFields, queryResult, queryResult2]);
+  }, [compareMode, compareKeys, compareFields, queryResult, queryResult2]);
 
   // Export comparison results to CSV
   const handleExportCompare = async () => {
@@ -481,10 +495,10 @@ export default function Home() {
     try {
       // Build CSV headers
       const headers = [
-        'Key Value',
+        ...(compareKeys.length > 0 ? compareKeys.map((key) => `Key: ${key}`) : ['Key Value']),
         'Status',
         'Left Count',
-        'Right Count'
+        'Right Count',
       ];
 
       // Add field comparison columns if fields are selected
@@ -507,7 +521,7 @@ export default function Home() {
       // Build CSV rows
       const rows = comparedResults.map((item) => {
         const row: string[] = [
-          String(item.key || '(null)'),
+          ...(compareKeys.length > 0 ? item.keyValues.map((value) => String(value || '(null)')) : [String(item.key || '(null)')]),
           item.status,
           String(item.leftRows.length),
           String(item.rightRows.length)
@@ -561,7 +575,7 @@ export default function Home() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `comparison_${compareKey}_${Date.now()}.csv`;
+      a.download = `comparison_${compareKeys.join('_') || 'keys'}_${Date.now()}.csv`;
       a.click();
       window.URL.revokeObjectURL(url);
     } finally {
@@ -679,7 +693,7 @@ export default function Home() {
             setSplitScreen(!splitScreen);
             if (!splitScreen) {
               setCompareMode(false);
-              setCompareKey('');
+              setCompareKeys([]);
             }
           }}
           compareMode={compareMode}
@@ -689,7 +703,7 @@ export default function Home() {
               setShowCompareModal(true);
             } else {
               setCompareMode(false);
-              setCompareKey('');
+              setCompareKeys([]);
               setCompareFields([]);
             }
           }}
@@ -701,7 +715,7 @@ export default function Home() {
           isExecutingActiveTabs={isExecutingActiveTabs}
           onExecuteActiveTabs={handleExecuteActiveTabs}
           comparedResults={comparedResults}
-          compareKey={compareKey}
+          compareKeys={compareKeys}
           compareFields={compareFields}
           isReExecuting={isReExecuting}
           onExportCompare={handleExportCompare}
@@ -709,7 +723,7 @@ export default function Home() {
           onOpenCompareFieldsModal={() => setShowCompareFieldsModal(true)}
           onCloseCompareResults={() => {
             setCompareMode(false);
-            setCompareKey('');
+            setCompareKeys([]);
             setCompareFields([]);
           }}
           isLoadingResult1={isLoadingResult1}
@@ -747,13 +761,13 @@ export default function Home() {
           showCompareModal={showCompareModal}
           showCompareFieldsModal={showCompareFieldsModal}
           commonColumns={commonColumns}
-          onCompareKeyChange={setCompareKey}
+          onCompareKeyChange={setCompareKeys}
           onCancelCompareKey={() => {
             setShowCompareModal(false);
-            setCompareKey('');
+            setCompareKeys([]);
           }}
           onConfirmCompareKey={() => {
-            if (compareKey) {
+            if (compareKeys.length > 0) {
               setCompareMode(true);
               setShowCompareModal(false);
               setTimeout(() => setShowCompareFieldsModal(true), 100);

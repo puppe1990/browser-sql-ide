@@ -21,7 +21,7 @@ const parseNumericValue = (value: unknown) => {
 
 type CompareResultsPanelProps = {
   height: number;
-  compareKey: string;
+  compareKeys: string[];
   compareFields: string[];
   comparedResults: ComparisonResult[];
   isReExecuting: boolean;
@@ -33,7 +33,7 @@ type CompareResultsPanelProps = {
 
 export default function CompareResultsPanel({
   height,
-  compareKey,
+  compareKeys,
   compareFields,
   comparedResults,
   isReExecuting,
@@ -71,7 +71,7 @@ export default function CompareResultsPanel({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-              Comparison Results (Key: {compareKey})
+              Comparison Results (Keys: {compareKeys.join(' > ')})
             </h3>
             {compareFields.length > 0 && (
               <span className="text-xs text-slate-500 dark:text-slate-400">
@@ -157,7 +157,7 @@ export default function CompareResultsPanel({
         <table className="w-full border-collapse">
           <thead className="sticky top-0 z-20">
             <tr className="bg-slate-50 dark:bg-slate-800">
-              <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">Key Value</th>
+              <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">Key Values</th>
               <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">Status</th>
               <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">Left Count</th>
               <th className="px-3 py-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">Right Count</th>

@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 type CompareFieldsModalProps = {
   open: boolean;
-  compareKey: string;
+  compareKeys: string[];
   commonColumns: string[];
   compareFields: string[];
   onToggleField: (field: string, checked: boolean) => void;
@@ -17,7 +17,7 @@ type CompareFieldsModalProps = {
 
 export default function CompareFieldsModal({
   open,
-  compareKey,
+  compareKeys,
   commonColumns,
   compareFields,
   onToggleField,
@@ -28,7 +28,7 @@ export default function CompareFieldsModal({
 }: CompareFieldsModalProps) {
   if (!open) return null;
 
-  const selectableColumns = commonColumns.filter((col) => col !== compareKey);
+  const selectableColumns = commonColumns.filter((col) => !compareKeys.includes(col));
   const [searchValue, setSearchValue] = useState('');
   useEffect(() => {
     if (open) {
