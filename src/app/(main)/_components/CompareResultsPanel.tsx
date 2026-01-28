@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo, useState } from 'react';
 import { Download, RefreshCw, X } from 'lucide-react';
 import type { ComparisonResult } from '@/types';
 
@@ -41,6 +42,29 @@ export default function CompareResultsPanel({
   onSelectFields,
   onClose,
 }: CompareResultsPanelProps) {
+  const [fieldMatchFilter, setFieldMatchFilter] = useState<'all' | 'match' | 'not-match'>('all');
+
+  const filteredResults = useMemo(() => {
+    if (compareFields.length === 0 || fieldMatchFilter === 'all') {
+      return comparedResults;
+    }
+
+    const isRowFieldMatch = (item: ComparisonResult) =>
+      compareFields.every((field) => item.fieldComparisons?.[field]?.match === true);
+    const isRowFieldNotMatch = (item: ComparisonResult) =>
+      compareFields.some((field) => !item.fieldComparisons?.[field]?.match);
+
+    return comparedResults.filter((item) => (
+      fieldMatchFilter === 'match' ? isRowFieldMatch(item) : isRowFieldNotMatch(item)
+    ));
+  }, [compareFields, comparedResults, fieldMatchFilter]);
+
+  const filteredCounts = useMemo(() => ({
+    match: filteredResults.filter((r) => r.status === 'match').length,
+    leftOnly: filteredResults.filter((r) => r.status === 'left-only').length,
+    rightOnly: filteredResults.filter((r) => r.status === 'right-only').length,
+  }), [filteredResults]);
+
   return (
     <div className="flex flex-col overflow-auto" style={{ height: `${height}px`, minHeight: '200px', flexShrink: 0 }}>
       <div className="px-4 py-2 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900">
@@ -53,6 +77,31 @@ export default function CompareResultsPanel({
               <span className="text-xs text-slate-500 dark:text-slate-400">
                 Comparing: {compareFields.join(', ')}
               </span>
+            )}
+            {compareFields.length > 0 && (
+              <div className="flex items-center gap-1 text-xs">
+                <span className="text-slate-500 dark:text-slate-400">Field filter:</span>
+                <div className="flex items-center gap-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded p-0.5">
+                  <button
+                    onClick={() => setFieldMatchFilter('all')}
+                    className={`px-2 py-0.5 rounded ${fieldMatchFilter === 'all' ? 'bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/50'}`}
+                  >
+                    All
+                  </button>
+                  <button
+                    onClick={() => setFieldMatchFilter('match')}
+                    className={`px-2 py-0.5 rounded ${fieldMatchFilter === 'match' ? 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/50'}`}
+                  >
+                    Match
+                  </button>
+                  <button
+                    onClick={() => setFieldMatchFilter('not-match')}
+                    className={`px-2 py-0.5 rounded ${fieldMatchFilter === 'not-match' ? 'bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/50'}`}
+                  >
+                    Not Match
+                  </button>
+                </div>
+              </div>
             )}
           </div>
           <div className="flex items-center gap-2">
@@ -90,15 +139,15 @@ export default function CompareResultsPanel({
             <div className="flex gap-4 text-xs">
               <span className="flex items-center gap-1">
                 <span className="w-3 h-3 bg-green-500 rounded"></span>
-                Match ({comparedResults.filter((r) => r.status === 'match').length})
+                Match ({filteredCounts.match})
               </span>
               <span className="flex items-center gap-1">
                 <span className="w-3 h-3 bg-blue-500 rounded"></span>
-                Left Only ({comparedResults.filter((r) => r.status === 'left-only').length})
+                Left Only ({filteredCounts.leftOnly})
               </span>
               <span className="flex items-center gap-1">
                 <span className="w-3 h-3 bg-orange-500 rounded"></span>
-                Right Only ({comparedResults.filter((r) => r.status === 'right-only').length})
+                Right Only ({filteredCounts.rightOnly})
               </span>
             </div>
           </div>
@@ -128,7 +177,7 @@ export default function CompareResultsPanel({
             </tr>
           </thead>
           <tbody className="bg-white dark:bg-slate-900 divide-y divide-slate-200 dark:divide-slate-800">
-            {comparedResults.map((item, idx: number) => (
+            {filteredResults.map((item, idx: number) => (
               <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                 <td className="px-3 py-2 text-xs text-slate-900 dark:text-slate-100 font-mono">{item.key || '(null)'}</td>
                 <td className="px-3 py-2 text-xs">
