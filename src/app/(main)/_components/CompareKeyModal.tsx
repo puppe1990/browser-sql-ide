@@ -1,6 +1,7 @@
 'use client';
 
 import { X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 
 type CompareKeyModalProps = {
   open: boolean;
@@ -21,6 +22,19 @@ export default function CompareKeyModal({
 }: CompareKeyModalProps) {
   if (!open) return null;
 
+  const [searchValue, setSearchValue] = useState('');
+  useEffect(() => {
+    if (open) {
+      setSearchValue('');
+    }
+  }, [open]);
+
+  const filteredColumns = useMemo(() => {
+    if (!searchValue.trim()) return commonColumns;
+    const normalized = searchValue.trim().toLowerCase();
+    return commonColumns.filter((col) => col.toLowerCase().includes(normalized));
+  }, [commonColumns, searchValue]);
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white dark:bg-slate-800 rounded-lg p-6 w-full max-w-md">
@@ -39,8 +53,15 @@ export default function CompareKeyModal({
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
             Choose one or more columns to compare by (order defines priority):
           </label>
+          <input
+            type="text"
+            value={searchValue}
+            onChange={(e) => setSearchValue(e.target.value)}
+            placeholder="Search keys"
+            className="mb-2 w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
           <div className="max-h-64 overflow-y-auto border border-slate-300 dark:border-slate-600 rounded-lg p-2 space-y-2">
-            {commonColumns.map((col) => (
+            {filteredColumns.map((col) => (
               <label key={col} className="flex items-center justify-between gap-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 p-2 rounded">
                 <div className="flex items-center gap-2">
                   <input
@@ -67,6 +88,11 @@ export default function CompareKeyModal({
             {commonColumns.length === 0 && (
               <p className="text-xs text-red-500 p-2">
                 No common columns found between the two results.
+              </p>
+            )}
+            {commonColumns.length > 0 && filteredColumns.length === 0 && (
+              <p className="text-xs text-slate-500 dark:text-slate-400 p-2">
+                No keys match your search.
               </p>
             )}
           </div>

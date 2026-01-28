@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Download, RefreshCw, X } from 'lucide-react';
+import { Download, Loader2, RefreshCw, X } from 'lucide-react';
 import type { ComparisonResult } from '@/types';
 
 const parseNumericValue = (value: unknown) => {
@@ -25,6 +25,7 @@ type CompareResultsPanelProps = {
   compareFields: string[];
   comparedResults: ComparisonResult[];
   isReExecuting: boolean;
+  isLoading: boolean;
   onExport: () => void;
   onReExecute: () => void;
   onSelectFields: () => void;
@@ -37,6 +38,7 @@ export default function CompareResultsPanel({
   compareFields,
   comparedResults,
   isReExecuting,
+  isLoading,
   onExport,
   onReExecute,
   onSelectFields,
@@ -66,7 +68,13 @@ export default function CompareResultsPanel({
   }), [filteredResults]);
 
   return (
-    <div className="flex flex-col overflow-auto" style={{ height: `${height}px`, minHeight: '200px', flexShrink: 0 }}>
+    <div className="relative flex flex-col overflow-auto" style={{ height: `${height}px`, minHeight: '200px', flexShrink: 0 }}>
+      {isLoading && (
+        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-white/70 dark:bg-slate-900/70 backdrop-blur-sm">
+          <Loader2 className="w-8 h-8 animate-spin text-blue-600 dark:text-blue-400" />
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">Loading all rows for compare...</p>
+        </div>
+      )}
       <div className="px-4 py-2 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">

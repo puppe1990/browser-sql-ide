@@ -63,6 +63,9 @@ export default function Home() {
   const [compareMode, setCompareMode] = useState(false);
   const [compareKeys, setCompareKeys] = useState<string[]>([]);
   const [compareFields, setCompareFields] = useState<string[]>([]);
+  const [compareRows1, setCompareRows1] = useState<RowData[] | null>(null);
+  const [compareRows2, setCompareRows2] = useState<RowData[] | null>(null);
+  const [isComparingAllRows, setIsComparingAllRows] = useState(false);
   const [showCompareModal, setShowCompareModal] = useState(false);
   const [showCompareFieldsModal, setShowCompareFieldsModal] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState>({
@@ -184,12 +187,14 @@ export default function Home() {
     if (resolvedIsSecond) {
       setQueryResult2({ ...result, query });
       setIsLoadingResult2(false);
+      setCompareRows2(null);
       if (query) {
         setSavedQueries(prev => ({ ...prev, query2: query }));
       }
     } else {
       setQueryResult({ ...result, query });
       setIsLoadingResult1(false);
+      setCompareRows1(null);
       if (query) {
         setSavedQueries(prev => ({ ...prev, query1: query }));
       }
@@ -408,9 +413,128 @@ export default function Home() {
     return queryResult.columns.filter(col => queryResult2.columns.includes(col));
   }, [queryResult, queryResult2]);
 
+  const fetchAllRowsForCompare = async (
+    source: QueryResultWithMeta,
+    connectionId: number,
+  ) => {
+    const baseRows = [...(source.rows || [])];
+    if (!source.hasMore) return baseRows;
+    if (!source.query) {
+      throw new Error('Could not find query text to fetch all rows.');
+    }
+
+    let rows = [...baseRows];
+    let offset = rows.length;
+    let more = true;
+    let safetyCounter = 0;
+
+    while (more) {
+      const response = await fetch('/api/query/paginate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          connectionId,
+          query: source.query,
+          offset,
+          limit: 100,
+        }),
+      });
+
+      const data = await response.json();
+      if (!data.success || !data.result) {
+        throw new Error(data.error || 'Failed to fetch all rows');
+      }
+
+      const newRows = data.result.rows || [];
+      if (newRows.length === 0) {
+        break;
+      }
+
+      rows = [...rows, ...newRows];
+      offset += newRows.length;
+      more = data.result.hasMore ?? false;
+
+      safetyCounter += 1;
+      if (safetyCounter > 10000) {
+        throw new Error('Aborted fetching rows due to excessive pagination.');
+      }
+    }
+
+    return rows;
+  };
+
+  useEffect(() => {
+    if (!compareMode || compareKeys.length === 0 || !queryResult || !queryResult2) {
+      setCompareRows1(null);
+      setCompareRows2(null);
+      setIsComparingAllRows(false);
+      return;
+    }
+
+    let cancelled = false;
+    const prepareCompareRows = async () => {
+      setIsComparingAllRows(true);
+      try {
+        let connectionId1 = queryResult.connectionId ?? activeConnectionId1 ?? selectedConnection?.id;
+        let connectionId2 = queryResult2.connectionId ?? activeConnectionId2 ?? selectedConnection?.id;
+        if (!connectionId1 || !connectionId2) {
+          const resolved = await resolveConnectionIds({
+            activeConnectionId1,
+            activeConnectionId2,
+            selectedConnection,
+          });
+          if ('error' in resolved) {
+            throw new Error(resolved.error);
+          }
+          connectionId1 = connectionId1 ?? resolved.connectionId1;
+          connectionId2 = connectionId2 ?? resolved.connectionId2;
+        }
+
+        const [rows1, rows2] = await Promise.all([
+          fetchAllRowsForCompare(queryResult, connectionId1),
+          fetchAllRowsForCompare(queryResult2, connectionId2),
+        ]);
+
+        if (!cancelled) {
+          setCompareRows1(rows1);
+          setCompareRows2(rows2);
+        }
+      } catch (error: unknown) {
+        if (!cancelled) {
+          alert(getErrorMessage(error) || 'Failed to load all rows for compare');
+        }
+      } finally {
+        if (!cancelled) {
+          setIsComparingAllRows(false);
+        }
+      }
+    };
+
+    prepareCompareRows();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    compareMode,
+    compareKeys.length,
+    queryResult,
+    queryResult2,
+    activeConnectionId1,
+    activeConnectionId2,
+    selectedConnection,
+  ]);
+
   // Compare results based on selected key
   const comparedResults = useMemo<ComparisonResult[] | null>(() => {
-    if (!compareMode || compareKeys.length === 0 || !queryResult || !queryResult2) return null;
+    if (!compareMode || compareKeys.length === 0 || !queryResult || !queryResult2 || isComparingAllRows) return null;
+
+    const needsFullRows = Boolean(queryResult.hasMore || queryResult2.hasMore);
+    if (needsFullRows && (compareRows1 === null || compareRows2 === null)) {
+      return null;
+    }
+
+    const leftRows = compareRows1 ?? queryResult.rows;
+    const rightRows = compareRows2 ?? queryResult2.rows;
 
     const result1Map = new Map<string, { keyValues: string[]; rows: RowData[] }>();
     const result2Map = new Map<string, { keyValues: string[]; rows: RowData[] }>();
@@ -429,12 +553,12 @@ export default function Home() {
     };
 
     // Index results by compare keys (priority order)
-    queryResult.rows.forEach((row: RowData) => {
+    leftRows.forEach((row: RowData) => {
       const keyValues = buildKeyValues(row);
       addRowToMap(result1Map, keyValues, row);
     });
 
-    queryResult2.rows.forEach((row: RowData) => {
+    rightRows.forEach((row: RowData) => {
       const keyValues = buildKeyValues(row);
       addRowToMap(result2Map, keyValues, row);
     });
@@ -480,7 +604,7 @@ export default function Home() {
     });
 
     return compared;
-  }, [compareMode, compareKeys, compareFields, queryResult, queryResult2]);
+  }, [compareMode, compareKeys, compareFields, queryResult, queryResult2, compareRows1, compareRows2, isComparingAllRows]);
 
   // Export comparison results to CSV
   const handleExportCompare = async () => {
@@ -718,6 +842,7 @@ export default function Home() {
           compareKeys={compareKeys}
           compareFields={compareFields}
           isReExecuting={isReExecuting}
+          isLoadingCompare={isComparingAllRows}
           onExportCompare={handleExportCompare}
           onReExecuteCompare={handleReExecuteCompare}
           onOpenCompareFieldsModal={() => setShowCompareFieldsModal(true)}

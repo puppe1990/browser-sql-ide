@@ -30,6 +30,7 @@ type MainContentProps = {
   compareKeys: string[];
   compareFields: string[];
   isReExecuting: boolean;
+  isLoadingCompare: boolean;
   onExportCompare: () => void;
   onReExecuteCompare: () => void;
   onOpenCompareFieldsModal: () => void;
@@ -89,6 +90,7 @@ export default function MainContent({
   compareKeys,
   compareFields,
   isReExecuting,
+  isLoadingCompare,
   onExportCompare,
   onReExecuteCompare,
   onOpenCompareFieldsModal,
@@ -274,13 +276,14 @@ export default function MainContent({
               </button>
             </div>
           </div>
-        ) : compareMode && comparedResults ? (
+        ) : compareMode && (comparedResults || isLoadingCompare) ? (
           <CompareResultsPanel
             height={queryResultsHeight}
             compareKeys={compareKeys}
             compareFields={compareFields}
-            comparedResults={comparedResults}
+            comparedResults={comparedResults ?? []}
             isReExecuting={isReExecuting}
+            isLoading={isLoadingCompare}
             onExport={onExportCompare}
             onReExecute={onReExecuteCompare}
             onSelectFields={onOpenCompareFieldsModal}
