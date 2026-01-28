@@ -121,6 +121,53 @@ export function getRowCountText(totalCount: number | undefined, currentRows: num
   return `${currentRows}${total} row${plural}`;
 }
 
+type EmptyResultFeedback = {
+  title: string;
+  detail?: string;
+};
+
+function stripSqlComments(query: string) {
+  const withoutBlock = query.replace(/\/\*[\s\S]*?\*\//g, ' ');
+  return withoutBlock.replace(/--.*$/gm, ' ');
+}
+
+function getFirstStatement(query: string) {
+  const cleaned = stripSqlComments(query);
+  const statements = cleaned
+    .split(/;+/)
+    .map((statement) => statement.trim())
+    .filter(Boolean);
+  return statements[0] ?? '';
+}
+
+function formatRowCount(rowCount: number) {
+  return `${rowCount} row${rowCount !== 1 ? 's' : ''} affected`;
+}
+
+export function getEmptyResultFeedback(
+  query?: string,
+  rowCount: number = 0
+): EmptyResultFeedback | null {
+  if (!query) return null;
+  const statement = getFirstStatement(query);
+  if (!statement) return null;
+  const upperStatement = statement.trim().toUpperCase();
+
+  if (upperStatement.startsWith('UPDATE')) {
+    return { title: 'Update executed successfully', detail: formatRowCount(rowCount) };
+  }
+
+  if (upperStatement.startsWith('DELETE')) {
+    return { title: 'Delete executed successfully', detail: formatRowCount(rowCount) };
+  }
+
+  if (/^REFRESH\s+MATERIALIZED\s+VIEW\b/.test(upperStatement)) {
+    return { title: 'Materialized view refreshed successfully' };
+  }
+
+  return null;
+}
+
 export function parseInsertStatements(sqlContent: string): string[] {
   // Remove comments (-- and /* */)
   let cleaned = sqlContent.replace(/--.*$/gm, '');

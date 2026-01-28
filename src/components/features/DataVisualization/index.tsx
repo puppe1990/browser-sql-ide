@@ -12,6 +12,7 @@ import {
   extractTableName,
   exportToCsv,
   exportToInsertStatements,
+  getEmptyResultFeedback,
   getRowCountText,
   parseInsertStatements,
 } from './utils';
@@ -124,6 +125,10 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
   const canInsert = allRows.length > 0 && result.columns.length > 0;
   const insertCountIsExact = totalCount !== undefined || !hasMore;
   const insertCount = totalCount !== undefined ? totalCount : allRows.length;
+  const emptyResultFeedback = useMemo(
+    () => getEmptyResultFeedback(query, result.rowCount),
+    [query, result.rowCount]
+  );
   const overlayMessage = isExporting
     ? 'Exporting...'
     : isImporting
@@ -452,9 +457,19 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
   if (!result || !result.columns || result.columns.length === 0) {
     return (
       <div className="h-full flex items-center justify-center bg-white dark:bg-slate-900">
-        <p className="text-slate-500 dark:text-slate-400 text-sm">
-          No data to display{connectionName ? ` for "${connectionName}"` : ''}
-        </p>
+        <div className="flex flex-col items-center gap-2">
+          <p
+            className={`text-sm font-medium ${
+              emptyResultFeedback ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'
+            }`}
+          >
+            {emptyResultFeedback?.title ??
+              `No data to display${connectionName ? ` for "${connectionName}"` : ''}`}
+          </p>
+          {emptyResultFeedback?.detail && (
+            <p className="text-xs text-slate-500 dark:text-slate-400">{emptyResultFeedback.detail}</p>
+          )}
+        </div>
       </div>
     );
   }
@@ -489,12 +504,18 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
       />
 
       <div ref={scrollContainerRef} className="flex-1 overflow-auto relative">
-        <ResultsTable
-          columns={result.columns}
-          rows={allRows}
-          isLoadingMore={isLoadingMore}
-          hasMore={hasMore}
-        />
+        {allRows.length === 0 ? (
+          <div className="flex items-center justify-center h-full">
+            <p className="text-sm text-slate-500 dark:text-slate-400">No rows returned</p>
+          </div>
+        ) : (
+          <ResultsTable
+            columns={result.columns}
+            rows={allRows}
+            isLoadingMore={isLoadingMore}
+            hasMore={hasMore}
+          />
+        )}
       </div>
 
       <InsertIntoConnectionModal
