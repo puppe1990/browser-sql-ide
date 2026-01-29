@@ -613,6 +613,21 @@ export default function Home() {
       return;
     }
 
+    const parseNumericValue = (value: unknown) => {
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        return value;
+      }
+
+      if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!trimmed) return null;
+        const parsed = Number(trimmed);
+        return Number.isFinite(parsed) ? parsed : null;
+      }
+
+      return null;
+    };
+
     setIsExportingCompare(true);
     await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -628,7 +643,7 @@ export default function Home() {
       // Add field comparison columns if fields are selected
       if (compareFields.length > 0) {
         compareFields.forEach(field => {
-          headers.push(`${field} (Left)`, `${field} (Right)`, `${field} (Match)`);
+          headers.push(`${field} (Left)`, `${field} (Right)`, `${field} (Match)`, `${field} (Diff)`);
         });
       } else {
         // Add all common columns from both results
@@ -638,7 +653,7 @@ export default function Home() {
           queryResult2.columns.forEach(col => allColumns.add(col));
         }
         allColumns.forEach(col => {
-          headers.push(`${col} (Left)`, `${col} (Right)`);
+          headers.push(`${col} (Left)`, `${col} (Right)`, `${col} (Diff)`);
         });
       }
 
@@ -659,13 +674,17 @@ export default function Home() {
               const leftValue = comparison.left ?? 'NULL';
               const rightValue = comparison.right ?? 'NULL';
               const match = comparison.match ? 'Yes' : 'No';
+              const leftNumber = parseNumericValue(leftValue);
+              const rightNumber = parseNumericValue(rightValue);
+              const diff = leftNumber !== null && rightNumber !== null ? String(leftNumber - rightNumber) : 'N/A';
               row.push(
                 String(leftValue).replace(/"/g, '""'),
                 String(rightValue).replace(/"/g, '""'),
-                match
+                match,
+                diff
               );
             } else {
-              row.push('N/A', 'N/A', 'N/A');
+              row.push('N/A', 'N/A', 'N/A', 'N/A');
             }
           });
         } else {
@@ -678,9 +697,13 @@ export default function Home() {
           allColumns.forEach(col => {
             const leftValue = item.leftRows[0]?.[col] ?? 'NULL';
             const rightValue = item.rightRows[0]?.[col] ?? 'NULL';
+            const leftNumber = parseNumericValue(leftValue);
+            const rightNumber = parseNumericValue(rightValue);
+            const diff = leftNumber !== null && rightNumber !== null ? String(leftNumber - rightNumber) : 'N/A';
             row.push(
               String(leftValue).replace(/"/g, '""'),
-              String(rightValue).replace(/"/g, '""')
+              String(rightValue).replace(/"/g, '""'),
+              diff
             );
           });
         }
