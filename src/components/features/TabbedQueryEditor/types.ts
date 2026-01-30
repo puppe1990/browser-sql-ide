@@ -7,6 +7,10 @@ export type Tab = {
   connectionId?: number;
   result?: QueryResult;
   error?: string;
+  lastExecutedQuery?: string;
 };
 
-export type ActiveTabPayload = Pick<Tab, 'id' | 'query' | 'connectionId' | 'result' | 'error'>;
+export type ActiveTabPayload = Pick<
+  Tab,
+  'id' | 'query' | 'connectionId' | 'result' | 'error' | 'lastExecutedQuery'
+>;

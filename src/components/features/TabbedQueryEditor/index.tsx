@@ -165,13 +165,18 @@ export default function TabbedQueryEditor({
     return () => clearTimeout(timeoutId);
   }, [tabs, editorId]);
 
-  const updateTabResult = useCallback((tabId: string, result: QueryResult, error?: string) => {
+  const updateTabResult = useCallback(
+    (tabId: string, result: QueryResult, error?: string, executedQuery?: string) => {
     setTabs((prev) =>
       prev.map((tab) =>
-        tab.id === tabId ? { ...tab, result, error } : tab
+        tab.id === tabId
+          ? { ...tab, result, error, lastExecutedQuery: executedQuery ?? tab.lastExecutedQuery }
+          : tab
       )
     );
-  }, []);
+    },
+    []
+  );
 
   const activeTab = tabs.find((tab) => tab.id === activeTabId);
 
@@ -188,6 +193,7 @@ export default function TabbedQueryEditor({
         connectionId: activeTab.connectionId,
         result: activeTab.result,
         error: activeTab.error,
+        lastExecutedQuery: activeTab.lastExecutedQuery,
       });
     }
   }, [
@@ -196,6 +202,7 @@ export default function TabbedQueryEditor({
     activeTab?.connectionId,
     activeTab?.result,
     activeTab?.error,
+    activeTab?.lastExecutedQuery,
     onActiveQueryChange,
     onActiveTabChange,
   ]);
@@ -204,7 +211,7 @@ export default function TabbedQueryEditor({
   const handleQueryResult = (result: QueryResult, query?: string) => {
     const resultWithSource = editorId ? { ...result, sourceEditorId: editorId } : result;
     if (activeTabId) {
-      updateTabResult(activeTabId, resultWithSource);
+      updateTabResult(activeTabId, resultWithSource, undefined, query);
     }
     if (onQueryResult) {
       // Pass query along with result for pagination

@@ -46,7 +46,9 @@ export function useQueryExecution({
 
   const handleActiveTabChange = (tab: ActiveTabPayload, isSecondEditor?: boolean) => {
     const resolvedIsSecond = Boolean(isSecondEditor);
-    const nextResult = tab.result ? { ...tab.result, query: tab.query } : null;
+    const nextResult = tab.result
+      ? { ...tab.result, query: tab.lastExecutedQuery ?? tab.query }
+      : null;
 
     if (resolvedIsSecond) {
       setQueryResult2(nextResult);
