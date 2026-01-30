@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import type { ReactNode } from 'react';
-import Editor from '@monaco-editor/react';
+import Editor, { useMonaco } from '@monaco-editor/react';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import { getErrorMessage } from '@/lib/utils';
 import { getDeleteConfirmationInfo } from '@/lib/query-utils';
@@ -74,6 +74,7 @@ export default function QueryEditor({
   });
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof Monaco | null>(null);
+  const monacoInstance = useMonaco();
   const isExecutingRef = useRef(false);
   const connectionIdRef = useRef(connectionId);
   const isEditorFocusedRef = useRef(false);
@@ -157,10 +158,44 @@ export default function QueryEditor({
     };
   }, [selectedConnectionId, query]);
 
+  const ensureSqlLanguage = (monaco: typeof Monaco) => {
+    const hasSql = monaco.languages.getLanguages().some((lang) => lang.id === 'sql');
+    if (!hasSql) {
+      monaco.languages.register({ id: 'sql' });
+    }
+    monaco.languages.setMonarchTokensProvider('sql', sqlLanguage);
+  };
+  
+  useEffect(() => {
+    if (!monacoInstance) return;
+    ensureSqlLanguage(monacoInstance);
+    monacoInstance.editor.getModels().forEach((model) => {
+      if (model.getLanguageId() !== 'sql') {
+        monacoInstance.editor.setModelLanguage(model, 'sql');
+      }
+    });
+  }, [monacoInstance]);
+
+  useEffect(() => {
+    const monaco = monacoRef.current;
+    const editor = editorRef.current;
+    if (!monaco || !editor) return;
+    ensureSqlLanguage(monaco);
+    const model = editor.getModel();
+    if (model && model.getLanguageId() !== 'sql') {
+      monaco.editor.setModelLanguage(model, 'sql');
+    }
+  }, [query]);
+
   const handleEditorDidMount = (editor: Monaco.editor.IStandaloneCodeEditor, monaco: typeof Monaco) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
     isEditorFocusedRef.current = editor.hasTextFocus();
+    ensureSqlLanguage(monaco);
+    const model = editor.getModel();
+    if (model) {
+      monaco.editor.setModelLanguage(model, 'sql');
+    }
     // Configure SQL language features
     editor.updateOptions({
       minimap: { enabled: false },
@@ -205,11 +240,7 @@ export default function QueryEditor({
   };
 
   const handleEditorBeforeMount = (monaco: typeof Monaco) => {
-    const hasSql = monaco.languages.getLanguages().some((lang) => lang.id === 'sql');
-    if (!hasSql) {
-      monaco.languages.register({ id: 'sql' });
-      monaco.languages.setMonarchTokensProvider('sql', sqlLanguage);
-    }
+    ensureSqlLanguage(monaco);
   };
 
   const closeDeleteConfirm = () => {
