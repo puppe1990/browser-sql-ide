@@ -145,6 +145,14 @@ export default function TabbedQueryEditor({
     );
   }, []);
 
+  const renameTab = useCallback((tabId: string, name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setTabs((prev) =>
+      prev.map((item) => (item.id === tabId ? { ...item, name: trimmed } : item))
+    );
+  }, []);
+
   // Debounced save to localStorage
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -260,6 +268,7 @@ export default function TabbedQueryEditor({
         onSelect={setActiveTabId}
         onClose={closeTab}
         onNew={createNewTab}
+        onRename={renameTab}
       />
 
       {/* Query Editor for Active Tab */}

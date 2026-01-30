@@ -38,17 +38,22 @@ export async function POST(request: NextRequest) {
     };
 
     // Test connection
+    let pool;
     try {
-      await dbConnector.connect(connection);
-      return NextResponse.json({ 
-        success: true, 
-        message: 'Connection test successful!' 
+      pool = await dbConnector.connect(connection);
+      return NextResponse.json({
+        success: true,
+        message: 'Connection test successful!',
       });
     } catch (error: unknown) {
       return NextResponse.json(
         { success: false, error: getErrorMessage(error) || 'Connection test failed' },
         { status: 400 }
       );
+    } finally {
+      if (pool) {
+        await pool.end();
+      }
     }
   } catch (error: unknown) {
     return NextResponse.json(

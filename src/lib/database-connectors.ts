@@ -70,30 +70,28 @@ class DatabaseConnector {
     const startTime = Date.now();
     const pool = await this.connect(connection);
 
+    const client: PoolClient = await pool.connect();
     try {
-      const client: PoolClient = await pool.connect();
-      
       // For SELECT queries, apply pagination if limit is specified
       let queryToExecute = query;
       let totalCount: number | undefined = undefined;
       let hasMore = false;
-      
+
       const upperQuery = query.trim().toUpperCase();
       if (upperQuery.startsWith('SELECT') && limit !== undefined) {
         // Get total count before pagination
         totalCount = await getTotalCount(this.connect.bind(this), connection, query);
-        
+
         // Apply pagination
         queryToExecute = addPaginationToQuery(query, offset, limit);
-        
+
         // Determine if there are more rows
         if (totalCount >= 0) {
           hasMore = offset + limit < totalCount;
         }
       }
-      
+
       const result = await client.query(queryToExecute);
-      client.release();
 
       const executionTime = Date.now() - startTime;
 
@@ -114,6 +112,8 @@ class DatabaseConnector {
       };
     } catch (error: unknown) {
       throw new Error(getErrorMessage(error) || 'Query execution failed');
+    } finally {
+      client.release();
     }
   }
 

@@ -54,9 +54,12 @@ export async function getTotalCount(
 
     const pool = await connect(connection);
     const client: PoolClient = await pool.connect();
-    const result = await client.query(countQuery);
-    client.release();
-    return parseInt(result.rows[0]?.total || '0', 10);
+    try {
+      const result = await client.query(countQuery);
+      return parseInt(result.rows[0]?.total || '0', 10);
+    } finally {
+      client.release();
+    }
   } catch {
     return -1;
   }

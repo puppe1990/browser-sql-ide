@@ -36,15 +36,22 @@ export async function PUT(
     const body = (await request.json()) as SavedQueryPayload;
     const { name, query, description, folder } = body;
 
-    const result = db
-      .prepare(
-        'UPDATE saved_queries SET name = ?, query = ?, description = ?, folder = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
-      )
-      .run(name, query, description, folder, id);
+    const existing = db
+      .prepare('SELECT * FROM saved_queries WHERE id = ?')
+      .get(id);
 
-    if (result.changes === 0) {
+    if (!existing) {
       return NextResponse.json({ error: 'Query not found' }, { status: 404 });
     }
+
+    const nextName = name ?? existing.name;
+    const nextQuery = query ?? existing.query;
+    const nextDescription = description === undefined ? existing.description : description;
+    const nextFolder = folder === undefined ? existing.folder : folder;
+
+    db.prepare(
+      'UPDATE saved_queries SET name = ?, query = ?, description = ?, folder = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+    ).run(nextName, nextQuery, nextDescription, nextFolder, id);
 
     const updatedQuery = db
       .prepare('SELECT * FROM saved_queries WHERE id = ?')
