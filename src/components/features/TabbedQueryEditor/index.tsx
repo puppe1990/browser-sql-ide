@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import QueryEditor from '@/components/features/QueryEditor';
 import type { QueryResult } from '@/types';
 import TabsBar from './_components/TabsBar';
-import type { Tab } from './types';
+import type { ActiveTabPayload, Tab } from './types';
 import { getDefaultConnectionId, getStorageKeys } from './utils';
 
 interface TabbedQueryEditorProps {
@@ -17,6 +17,7 @@ interface TabbedQueryEditorProps {
   onQueryStart?: () => void; // Callback when query execution starts
   onQueryError?: () => void; // Callback when query execution fails
   editorRef?: React.MutableRefObject<{ addQueryToTab: (query: string) => void } | null>; // Ref to expose methods
+  onActiveTabChange?: (tab: ActiveTabPayload) => void; // Callback when active tab changes
 }
 
 export default function TabbedQueryEditor({
@@ -29,6 +30,7 @@ export default function TabbedQueryEditor({
   onQueryStart,
   onQueryError,
   editorRef,
+  onActiveTabChange,
 }: TabbedQueryEditorProps) {
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
@@ -165,12 +167,30 @@ export default function TabbedQueryEditor({
 
   const activeTab = tabs.find((tab) => tab.id === activeTabId);
 
-  // Notify parent when active query changes
+  // Notify parent when active query or tab changes
   useEffect(() => {
-    if (activeTab && onActiveQueryChange) {
+    if (!activeTab) return;
+    if (onActiveQueryChange) {
       onActiveQueryChange(activeTab.query);
     }
-  }, [activeTab, onActiveQueryChange]);
+    if (onActiveTabChange) {
+      onActiveTabChange({
+        id: activeTab.id,
+        query: activeTab.query,
+        connectionId: activeTab.connectionId,
+        result: activeTab.result,
+        error: activeTab.error,
+      });
+    }
+  }, [
+    activeTab?.id,
+    activeTab?.query,
+    activeTab?.connectionId,
+    activeTab?.result,
+    activeTab?.error,
+    onActiveQueryChange,
+    onActiveTabChange,
+  ]);
 
 
   const handleQueryResult = (result: QueryResult, query?: string) => {

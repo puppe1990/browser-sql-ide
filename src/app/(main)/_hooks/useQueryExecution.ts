@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { getErrorMessage } from '@/lib/utils';
 import { processQuery } from '@/lib/query-utils';
 import type { QueryResult } from '@/types';
+import type { ActiveTabPayload } from '@/components/features/TabbedQueryEditor/types';
 import type { Connection, QueryResultWithMeta } from '../types';
 import {
   executeQueries,
@@ -42,6 +43,25 @@ export function useQueryExecution({
   const [isLoadingResult1, setIsLoadingResult1] = useState(false);
   const [isLoadingResult2, setIsLoadingResult2] = useState(false);
   const [pendingCompareRestore, setPendingCompareRestore] = useState<PendingCompareRestore | null>(null);
+
+  const handleActiveTabChange = (tab: ActiveTabPayload, isSecondEditor?: boolean) => {
+    const resolvedIsSecond = Boolean(isSecondEditor);
+    const nextResult = tab.result ? { ...tab.result, query: tab.query } : null;
+
+    if (resolvedIsSecond) {
+      setQueryResult2(nextResult);
+      setIsLoadingResult2(false);
+      setActiveConnectionId2(
+        typeof tab.connectionId === 'number' ? tab.connectionId : undefined,
+      );
+    } else {
+      setQueryResult(nextResult);
+      setIsLoadingResult1(false);
+      setActiveConnectionId1(
+        typeof tab.connectionId === 'number' ? tab.connectionId : undefined,
+      );
+    }
+  };
 
   const handleQueryResult = (result: QueryResult, query?: string, isSecondEditor?: boolean) => {
     const resolvedIsSecond =
@@ -299,6 +319,7 @@ export function useQueryExecution({
     setPendingCompareRestore,
     setIsLoadingResult1,
     setIsLoadingResult2,
+    handleActiveTabChange,
     handleQueryResult,
     handleExecuteActiveTabs,
     handleReExecuteCompare,

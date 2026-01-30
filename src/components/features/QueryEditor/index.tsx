@@ -8,6 +8,7 @@ import { getErrorMessage } from '@/lib/utils';
 import { getDeleteConfirmationInfo } from '@/lib/query-utils';
 import type { QueryResult } from '@/types';
 import type * as Monaco from 'monaco-editor';
+import { language as sqlLanguage } from 'monaco-editor/esm/vs/basic-languages/sql/sql';
 import EditorHeader from './_components/EditorHeader';
 import EditorFooter from './_components/EditorFooter';
 import { findErrorLine, getQueryFromEditor } from './utils';
@@ -203,6 +204,14 @@ export default function QueryEditor({
     });
   };
 
+  const handleEditorBeforeMount = (monaco: typeof Monaco) => {
+    const hasSql = monaco.languages.getLanguages().some((lang) => lang.id === 'sql');
+    if (!hasSql) {
+      monaco.languages.register({ id: 'sql' });
+      monaco.languages.setMonarchTokensProvider('sql', sqlLanguage);
+    }
+  };
+
   const closeDeleteConfirm = () => {
     setDeleteConfirm((prev) => ({ ...prev, open: false }));
   };
@@ -328,6 +337,7 @@ export default function QueryEditor({
       <div className="flex-1 min-h-0">
         <Editor
           height="100%"
+          language="sql"
           defaultLanguage="sql"
           value={query}
           onChange={(value) => {
@@ -337,6 +347,7 @@ export default function QueryEditor({
               onQueryChange(newQuery);
             }
           }}
+          beforeMount={handleEditorBeforeMount}
           onMount={handleEditorDidMount}
           theme="vs-dark"
           options={{

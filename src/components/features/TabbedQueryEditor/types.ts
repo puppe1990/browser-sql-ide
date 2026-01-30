@@ -8,3 +8,5 @@ export type Tab = {
   result?: QueryResult;
   error?: string;
 };
+
+export type ActiveTabPayload = Pick<Tab, 'id' | 'query' | 'connectionId' | 'result' | 'error'>;

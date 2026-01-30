@@ -44,6 +44,7 @@ export default function Home() {
     setPendingCompareRestore,
     setIsLoadingResult1,
     setIsLoadingResult2,
+    handleActiveTabChange,
     handleQueryResult,
     handleExecuteActiveTabs,
     handleReExecuteCompare,
@@ -175,6 +176,9 @@ export default function Home() {
           onQueryResultSingle={handleQueryResult}
           onActiveQueryChange1={setActiveQuery1}
           onActiveQueryChange2={setActiveQuery2}
+          onActiveTabChange1={(tab) => handleActiveTabChange(tab, false)}
+          onActiveTabChange2={(tab) => handleActiveTabChange(tab, true)}
+          onActiveTabChangeSingle={(tab) => handleActiveTabChange(tab, false)}
           onConnectionChange1={setActiveConnectionId1}
           onConnectionChange2={setActiveConnectionId2}
           onQueryStart1={() => setIsLoadingResult1(true)}

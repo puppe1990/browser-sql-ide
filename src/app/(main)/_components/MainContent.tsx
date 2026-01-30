@@ -10,6 +10,7 @@ import CompareKeyModal from './CompareKeyModal';
 import CompareFieldsModal from './CompareFieldsModal';
 import type { ComparisonResult } from '@/types';
 import type { QueryResultWithMeta } from '../types';
+import type { ActiveTabPayload } from '@/components/features/TabbedQueryEditor/types';
 
 type MainContentProps = {
   sidebarOpen: boolean;
@@ -47,6 +48,9 @@ type MainContentProps = {
   onQueryResultSingle: (result: QueryResultWithMeta, query?: string) => void;
   onActiveQueryChange1: (query: string) => void;
   onActiveQueryChange2: (query: string) => void;
+  onActiveTabChange1: (tab: ActiveTabPayload) => void;
+  onActiveTabChange2: (tab: ActiveTabPayload) => void;
+  onActiveTabChangeSingle: (tab: ActiveTabPayload) => void;
   onConnectionChange1: (id: number) => void;
   onConnectionChange2: (id: number) => void;
   onQueryStart1: () => void;
@@ -107,6 +111,9 @@ export default function MainContent({
   onQueryResultSingle,
   onActiveQueryChange1,
   onActiveQueryChange2,
+  onActiveTabChange1,
+  onActiveTabChange2,
+  onActiveTabChangeSingle,
   onConnectionChange1,
   onConnectionChange2,
   onQueryStart1,
@@ -190,6 +197,7 @@ export default function MainContent({
               onQuerySave={onQuerySave}
               onQueryResult={onQueryResult1}
               onActiveQueryChange={onActiveQueryChange1}
+              onActiveTabChange={onActiveTabChange1}
               onConnectionChange={onConnectionChange1}
               onQueryStart={onQueryStart1}
               onQueryError={onQueryError1}
@@ -211,6 +219,7 @@ export default function MainContent({
               onQuerySave={onQuerySave}
               onQueryResult={onQueryResult2}
               onActiveQueryChange={onActiveQueryChange2}
+              onActiveTabChange={onActiveTabChange2}
               onConnectionChange={onConnectionChange2}
               onQueryStart={onQueryStart2}
               onQueryError={onQueryError2}
@@ -232,6 +241,7 @@ export default function MainContent({
             connectionId={selectedConnectionId}
             onQuerySave={onQuerySave}
             onQueryResult={onQueryResultSingle}
+            onActiveTabChange={onActiveTabChangeSingle}
             onQueryStart={onQueryStart1}
             onQueryError={onQueryError1}
             editorRef={editorRefSingle}
