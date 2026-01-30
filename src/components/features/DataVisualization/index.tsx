@@ -469,6 +469,11 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
           {emptyResultFeedback?.detail && (
             <p className="text-xs text-slate-500 dark:text-slate-400">{emptyResultFeedback.detail}</p>
           )}
+          {emptyResultFeedback && connectionName && (
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Connection: {connectionName}
+            </p>
+          )}
         </div>
       </div>
     );
