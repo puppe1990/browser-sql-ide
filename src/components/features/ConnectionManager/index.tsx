@@ -43,6 +43,7 @@ export default function ConnectionManager({
     username: '',
     password: '',
     ssl: false,
+    color: '#3b82f6',
   });
 
   const loadConnections = useCallback(async () => {
@@ -220,6 +221,7 @@ export default function ConnectionManager({
       username: connection.username,
       password: '', // Don't pre-fill password
       ssl: connection.ssl,
+      color: connection.color ?? '#3b82f6',
     });
     setShowModal(true);
   };
@@ -234,6 +236,7 @@ export default function ConnectionManager({
       username: '',
       password: '',
       ssl: false,
+      color: '#3b82f6',
     });
     setEditingConnection(null);
     setTestResult(null);
@@ -248,6 +251,7 @@ export default function ConnectionManager({
       database: conn.database,
       username: conn.username,
       ssl: conn.ssl,
+      color: conn.color ?? undefined,
       // Note: Passwords are not exported for security reasons
       // Users will need to re-enter passwords when importing
     }));
@@ -313,6 +317,7 @@ export default function ConnectionManager({
               username: conn.username,
               password: conn.password || '', // User will need to set password
               ssl: conn.ssl || false,
+              color: conn.color,
             }),
           });
 

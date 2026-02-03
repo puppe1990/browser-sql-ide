@@ -29,10 +29,19 @@ export function initializeDatabase() {
       username TEXT NOT NULL,
       encrypted_password TEXT NOT NULL,
       ssl BOOLEAN DEFAULT 0,
+      color TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
+
+  const connectionColumns = db
+    .prepare("PRAGMA table_info(connections)")
+    .all() as Array<{ name: string }>;
+  const hasColorColumn = connectionColumns.some((column) => column.name === 'color');
+  if (!hasColorColumn) {
+    db.exec('ALTER TABLE connections ADD COLUMN color TEXT');
+  }
 
   // Saved queries table
   db.exec(`

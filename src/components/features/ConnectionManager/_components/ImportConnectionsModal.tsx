@@ -57,7 +57,7 @@ export default function ImportConnectionsModal({
             <textarea
               value={importJson}
               onChange={(e) => onImportJsonChange(e.target.value)}
-              placeholder={`[\n  {\n    "name": "My Database",\n    "type": "postgresql",\n    "host": "localhost",\n    "port": 5432,\n    "database": "mydb",\n    "username": "user",\n    "password": "password",\n    "ssl": false\n  }\n]`}
+              placeholder={`[\n  {\n    "name": "My Database",\n    "type": "postgresql",\n    "host": "localhost",\n    "port": 5432,\n    "database": "mydb",\n    "username": "user",\n    "password": "password",\n    "ssl": false,\n    "color": "#3b82f6"\n  }\n]`}
               rows={12}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono text-sm"
             />

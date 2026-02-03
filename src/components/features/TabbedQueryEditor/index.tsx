@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import QueryEditor from '@/components/features/QueryEditor';
 import type { QueryResult } from '@/types';
 import TabsBar from './_components/TabsBar';
 import type { ActiveTabPayload, Tab } from './types';
 import { getDefaultConnectionId, getStorageKeys } from './utils';
+import { useConnections } from '@/components/features/QueryEditor/helpers';
 
 interface TabbedQueryEditorProps {
   connectionId?: number;
@@ -35,6 +36,16 @@ export default function TabbedQueryEditor({
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [defaultConnectionId, setDefaultConnectionId] = useState<number | undefined>(undefined);
+  const { connections } = useConnections({});
+  const connectionColors = useMemo(() => {
+    const map: Record<number, string> = {};
+    connections.forEach((connection) => {
+      if (connection.color) {
+        map[connection.id] = connection.color;
+      }
+    });
+    return map;
+  }, [connections]);
 
   const createNewTab = useCallback(() => {
     const preferredConnectionId = defaultConnectionId ?? getDefaultConnectionId() ?? connectionId;
@@ -276,6 +287,7 @@ export default function TabbedQueryEditor({
         onClose={closeTab}
         onNew={createNewTab}
         onRename={renameTab}
+        connectionColors={connectionColors}
       />
 
       {/* Query Editor for Active Tab */}

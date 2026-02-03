@@ -138,6 +138,26 @@ export default function ConnectionFormModal({
             />
           </div>
 
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Color
+            </label>
+            <div className="flex items-center gap-3">
+              <input
+                type="color"
+                value={formData.color || '#3b82f6'}
+                onChange={(e) => onChange({ ...formData, color: e.target.value })}
+                className="h-9 w-12 cursor-pointer rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-1"
+              />
+              <input
+                type="text"
+                value={formData.color}
+                onChange={(e) => onChange({ ...formData, color: e.target.value || '#3b82f6' })}
+                className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white font-mono text-sm"
+              />
+            </div>
+          </div>
+
           <div className="flex items-center">
             <input
               type="checkbox"

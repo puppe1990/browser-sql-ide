@@ -9,6 +9,7 @@ export type Connection = {
   database: string;
   username: string;
   ssl: boolean;
+  color?: string | null;
 };
 
 export type QueryResultWithMeta = QueryResult & {

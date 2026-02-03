@@ -227,6 +227,11 @@ export default function ConnectionList({
                       <ChevronRight className="w-3.5 h-3.5" />
                     )}
                   </button>
+                  <span
+                    className="w-2.5 h-2.5 rounded-full border border-slate-200 dark:border-slate-700 flex-shrink-0"
+                    style={{ backgroundColor: connection.color ?? '#3b82f6' }}
+                    aria-label={`Connection color ${connection.color ?? '#3b82f6'}`}
+                  />
                   <h3 className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
                     {connection.name}
                   </h3>

@@ -14,6 +14,7 @@ type ConnectionPayload = {
   username?: string;
   password?: string;
   ssl?: boolean;
+  color?: string;
 };
 
 export async function GET(
@@ -23,7 +24,7 @@ export async function GET(
   try {
     const id = parseInt(params.id);
     const connection = db
-      .prepare('SELECT id, name, type, host, port, database, username, ssl, created_at, updated_at FROM connections WHERE id = ?')
+      .prepare('SELECT id, name, type, host, port, database, username, ssl, color, created_at, updated_at FROM connections WHERE id = ?')
       .get(id);
 
     if (!connection) {
@@ -43,7 +44,7 @@ export async function PUT(
   try {
     const id = parseInt(params.id);
     const body = (await request.json()) as ConnectionPayload;
-    const { name, type, host, port, database, username, password, ssl } = body;
+    const { name, type, host, port, database, username, password, ssl, color } = body;
 
     const existing = db
       .prepare('SELECT * FROM connections WHERE id = ?')
@@ -61,16 +62,31 @@ export async function PUT(
     const nextDatabase = database ?? existing.database;
     const nextUsername = username ?? existing.username;
     const nextSsl = ssl !== undefined ? (ssl ? 1 : 0) : existing.ssl;
+    const nextColor =
+      typeof color === 'string'
+        ? color.trim() || null
+        : (existing.color ?? null);
 
     db.prepare(
-      'UPDATE connections SET name = ?, type = ?, host = ?, port = ?, database = ?, username = ?, encrypted_password = ?, ssl = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
-    ).run(nextName, nextType, nextHost, nextPort, nextDatabase, nextUsername, encryptedPassword, nextSsl, id);
+      'UPDATE connections SET name = ?, type = ?, host = ?, port = ?, database = ?, username = ?, encrypted_password = ?, ssl = ?, color = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+    ).run(
+      nextName,
+      nextType,
+      nextHost,
+      nextPort,
+      nextDatabase,
+      nextUsername,
+      encryptedPassword,
+      nextSsl,
+      nextColor,
+      id
+    );
 
     // Ensure a fresh pool is created with updated credentials on next use.
     await dbConnector.disconnect(id);
 
     const connection = db
-      .prepare('SELECT id, name, type, host, port, database, username, ssl, created_at, updated_at FROM connections WHERE id = ?')
+      .prepare('SELECT id, name, type, host, port, database, username, ssl, color, created_at, updated_at FROM connections WHERE id = ?')
       .get(id);
 
     return NextResponse.json({ connection });

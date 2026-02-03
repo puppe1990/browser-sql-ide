@@ -37,6 +37,7 @@ export type DbConnectionRow = {
   username: string;
   encrypted_password: string;
   ssl: number;
+  color?: string | null;
   created_at?: string;
   updated_at?: string;
 };

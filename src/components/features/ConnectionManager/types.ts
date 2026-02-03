@@ -7,6 +7,7 @@ export type Connection = {
   database: string;
   username: string;
   ssl: boolean;
+  color?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -20,6 +21,7 @@ export type ConnectionFormData = {
   username: string;
   password: string;
   ssl: boolean;
+  color: string;
 };
 
 export type TestResult = {
