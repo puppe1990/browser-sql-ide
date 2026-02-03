@@ -11,6 +11,7 @@ type TabsBarProps = {
   onClose: (tabId: string, e?: React.MouseEvent) => void;
   onNew: () => void;
   onRename: (tabId: string, name: string) => void;
+  onReorder: (dragId: string, targetId: string) => void;
   connectionColors?: Record<number, string>;
 };
 
@@ -21,10 +22,12 @@ export default function TabsBar({
   onClose,
   onNew,
   onRename,
+  onReorder,
   connectionColors = {},
 }: TabsBarProps) {
   const [editingTabId, setEditingTabId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState('');
+  const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const beginRename = (tab: Tab) => {
@@ -57,9 +60,31 @@ export default function TabsBar({
           <div
             key={tab.id}
             onClick={() => onSelect(tab.id)}
+            draggable={editingTabId !== tab.id}
+            onDragStart={(e) => {
+              setDraggingTabId(tab.id);
+              e.dataTransfer.setData('text/plain', tab.id);
+              e.dataTransfer.effectAllowed = 'move';
+            }}
+            onDragOver={(e) => {
+              if (draggingTabId && draggingTabId !== tab.id) {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+              }
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              const dragId = e.dataTransfer.getData('text/plain') || draggingTabId;
+              if (dragId && dragId !== tab.id) {
+                onReorder(dragId, tab.id);
+              }
+              setDraggingTabId(null);
+            }}
+            onDragEnd={() => setDraggingTabId(null)}
             className={`
               flex items-center gap-2 px-4 py-2 cursor-pointer border-r border-slate-200 dark:border-slate-800
               transition-colors min-w-0 max-w-xs flex-shrink-0
+              ${draggingTabId === tab.id ? 'opacity-60' : ''}
               ${
                 tab.id === activeTabId
                   ? 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 border-b-2'

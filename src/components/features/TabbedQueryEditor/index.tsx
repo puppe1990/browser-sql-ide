@@ -164,6 +164,18 @@ export default function TabbedQueryEditor({
     );
   }, []);
 
+  const reorderTabs = useCallback((dragId: string, targetId: string) => {
+    if (!dragId || !targetId || dragId === targetId) return;
+    setTabs((prev) => {
+      const fromIndex = prev.findIndex((tab) => tab.id === dragId);
+      const toIndex = prev.findIndex((tab) => tab.id === targetId);
+      if (fromIndex === -1 || toIndex === -1) return prev;
+      const nextTabs = [...prev];
+      const [moved] = nextTabs.splice(fromIndex, 1);
+      nextTabs.splice(toIndex, 0, moved);
+      return nextTabs;
+    });
+  }, []);
   // Debounced save to localStorage
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -287,6 +299,7 @@ export default function TabbedQueryEditor({
         onClose={closeTab}
         onNew={createNewTab}
         onRename={renameTab}
+        onReorder={reorderTabs}
         connectionColors={connectionColors}
       />
 
