@@ -4,7 +4,6 @@ import { Columns, GitCompare, Loader2, PanelLeftOpen, Play } from 'lucide-react'
 import type { MouseEvent, MutableRefObject } from 'react';
 import TabbedQueryEditor from '@/components/features/TabbedQueryEditor';
 import DataVisualization from '@/components/features/DataVisualization';
-import SavedQueries from '@/components/features/SavedQueries';
 import CompareResultsPanel from './CompareResultsPanel';
 import CompareKeyModal from './CompareKeyModal';
 import CompareFieldsModal from './CompareFieldsModal';
@@ -23,7 +22,6 @@ type MainContentProps = {
   queryResult: QueryResultWithMeta | null;
   queryResult2: QueryResultWithMeta | null;
   queryResultsHeight: number;
-  savedQueriesHeight: number;
   splitScreenWidth: number;
   isExecutingActiveTabs: boolean;
   onExecuteActiveTabs: () => void;
@@ -39,7 +37,6 @@ type MainContentProps = {
   isLoadingResult1: boolean;
   isLoadingResult2: boolean;
   onStartResizeResults: (e: MouseEvent) => void;
-  onStartResizeSavedQueries: (e: MouseEvent) => void;
   onStartResizeSplit: (e: MouseEvent) => void;
   selectedConnectionId?: number;
   onQuerySave: (query: string) => void;
@@ -60,8 +57,6 @@ type MainContentProps = {
   editorRef1: MutableRefObject<{ addQueryToTab: (query: string) => void } | null>;
   editorRef2: MutableRefObject<{ addQueryToTab: (query: string) => void } | null>;
   editorRefSingle: MutableRefObject<{ addQueryToTab: (query: string) => void } | null>;
-  onQuerySelect: (query: string) => void;
-  onQueryExecute: (query: string) => void;
   showCompareModal: boolean;
   showCompareFieldsModal: boolean;
   commonColumns: string[];
@@ -86,7 +81,6 @@ export default function MainContent({
   queryResult,
   queryResult2,
   queryResultsHeight,
-  savedQueriesHeight,
   splitScreenWidth,
   isExecutingActiveTabs,
   onExecuteActiveTabs,
@@ -102,7 +96,6 @@ export default function MainContent({
   isLoadingResult1,
   isLoadingResult2,
   onStartResizeResults,
-  onStartResizeSavedQueries,
   onStartResizeSplit,
   selectedConnectionId,
   onQuerySave,
@@ -123,8 +116,6 @@ export default function MainContent({
   editorRef1,
   editorRef2,
   editorRefSingle,
-  onQuerySelect,
-  onQueryExecute,
   showCompareModal,
   showCompareFieldsModal,
   commonColumns,
@@ -183,7 +174,7 @@ export default function MainContent({
           style={{
             height: (queryResult || queryResult2)
               ? `calc(100% - ${queryResultsHeight}px - 4px)`
-              : `calc(100% - ${savedQueriesHeight}px - 4px)`,
+              : '100%',
             minHeight: '200px',
           }}
         >
@@ -233,7 +224,7 @@ export default function MainContent({
           style={{
             height: queryResult
               ? `calc(100% - ${queryResultsHeight}px - 4px)`
-              : `calc(100% - ${savedQueriesHeight}px - 4px)`,
+              : '100%',
             minHeight: '200px',
           }}
         >
@@ -378,16 +369,6 @@ export default function MainContent({
         )
       )}
 
-      {!queryResult && (
-        <div
-          onMouseDown={onStartResizeSavedQueries}
-          className="h-1 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 cursor-row-resize transition-colors relative group border-t border-slate-200 dark:border-slate-800"
-          style={{ flexShrink: 0 }}
-        >
-          <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-1 bg-transparent group-hover:bg-blue-500 dark:group-hover:bg-blue-400 transition-colors" />
-        </div>
-      )}
-
       <CompareKeyModal
         open={showCompareModal}
         compareKeys={compareKeys}
@@ -408,23 +389,6 @@ export default function MainContent({
         onDone={onDoneCompareFields}
         onClose={onCloseCompareFields}
       />
-
-      {!queryResult && !queryResult2 && (
-        <div
-          className="overflow-hidden border-t border-slate-200 dark:border-slate-800"
-          style={{
-            height: `${savedQueriesHeight}px`,
-            minHeight: '150px',
-            flexShrink: 0,
-          }}
-        >
-          <SavedQueries
-            connectionId={selectedConnectionId}
-            onQuerySelect={onQuerySelect}
-            onQueryExecute={onQueryExecute}
-          />
-        </div>
-      )}
     </main>
   );
 }

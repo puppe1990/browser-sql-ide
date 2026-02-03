@@ -2,6 +2,7 @@
 
 import { PanelLeftClose } from 'lucide-react';
 import ConnectionManager from '@/components/features/ConnectionManager';
+import SavedQueries from '@/components/features/SavedQueries';
 import type { Connection } from '../types';
 
 type SidebarProps = {
@@ -9,6 +10,8 @@ type SidebarProps = {
   onClose: () => void;
   selectedConnectionId?: number;
   onConnectionSelect: (connection: Connection) => void;
+  onQuerySelect: (query: string) => void;
+  onQueryExecute: (query: string) => void;
 };
 
 export default function Sidebar({
@@ -16,6 +19,8 @@ export default function Sidebar({
   onClose,
   selectedConnectionId,
   onConnectionSelect,
+  onQuerySelect,
+  onQueryExecute,
 }: SidebarProps) {
   return (
     <aside
@@ -42,11 +47,20 @@ export default function Sidebar({
               <PanelLeftClose className="w-4 h-4" />
             </button>
           </div>
-          <div className="flex-1 overflow-auto">
-            <ConnectionManager
-              onConnectionSelect={onConnectionSelect}
-              selectedConnectionId={selectedConnectionId}
-            />
+          <div className="flex-1 overflow-hidden flex flex-col">
+            <div className="flex-[3] min-h-0 border-b border-slate-200 dark:border-slate-800">
+              <ConnectionManager
+                onConnectionSelect={onConnectionSelect}
+                selectedConnectionId={selectedConnectionId}
+              />
+            </div>
+            <div className="flex-[2] min-h-0">
+              <SavedQueries
+                connectionId={selectedConnectionId}
+                onQuerySelect={onQuerySelect}
+                onQueryExecute={onQueryExecute}
+              />
+            </div>
           </div>
         </>
       )}

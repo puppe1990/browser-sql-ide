@@ -18,10 +18,8 @@ export default function Home() {
   const { sidebarOpen, setSidebarOpen, splitScreen, setSplitScreen } = useLayoutState();
   const {
     queryResultsHeight,
-    savedQueriesHeight,
     splitScreenWidth,
     setIsResizing,
-    setIsResizingSavedQueries,
     setIsResizingSplit,
   } = useResizeState({ splitScreen });
   const { connectionsById } = useConnections();
@@ -111,6 +109,8 @@ export default function Home() {
           onClose={() => setSidebarOpen(false)}
           selectedConnectionId={selectedConnection?.id}
           onConnectionSelect={handleConnectionSelect}
+          onQuerySelect={handleQuerySelect}
+          onQueryExecute={handleQueryExecute}
         />
 
         <MainContent
@@ -138,7 +138,6 @@ export default function Home() {
           queryResult={queryResult}
           queryResult2={queryResult2}
           queryResultsHeight={queryResultsHeight}
-          savedQueriesHeight={savedQueriesHeight}
           splitScreenWidth={splitScreenWidth}
           isExecutingActiveTabs={isExecutingActiveTabs}
           onExecuteActiveTabs={handleExecuteActiveTabs}
@@ -160,10 +159,6 @@ export default function Home() {
           onStartResizeResults={(e) => {
             e.preventDefault();
             setIsResizing(true);
-          }}
-          onStartResizeSavedQueries={(e) => {
-            e.preventDefault();
-            setIsResizingSavedQueries(true);
           }}
           onStartResizeSplit={(e) => {
             e.preventDefault();
@@ -188,8 +183,6 @@ export default function Home() {
           editorRef1={editor1Ref}
           editorRef2={editor2Ref}
           editorRefSingle={singleEditorRef}
-          onQuerySelect={handleQuerySelect}
-          onQueryExecute={handleQueryExecute}
           showCompareModal={showCompareModal}
           showCompareFieldsModal={showCompareFieldsModal}
           commonColumns={commonColumns}
