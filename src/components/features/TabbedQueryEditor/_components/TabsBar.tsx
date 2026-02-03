@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Plus, X } from 'lucide-react';
 import type { Tab } from '../types';
 
@@ -12,6 +12,7 @@ type TabsBarProps = {
   onNew: () => void;
   onRename: (tabId: string, name: string) => void;
   onReorder: (dragId: string, targetId: string) => void;
+  onDuplicate: (tabId: string) => void;
   connectionColors?: Record<number, string>;
 };
 
@@ -23,11 +24,17 @@ export default function TabsBar({
   onNew,
   onRename,
   onReorder,
+  onDuplicate,
   connectionColors = {},
 }: TabsBarProps) {
   const [editingTabId, setEditingTabId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState('');
   const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    tabId: string;
+    x: number;
+    y: number;
+  } | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const beginRename = (tab: Tab) => {
@@ -48,6 +55,28 @@ export default function TabsBar({
     setEditingTabId(null);
   };
 
+  useEffect(() => {
+    if (!contextMenu) return;
+
+    const handleOutsideClick = () => setContextMenu(null);
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setContextMenu(null);
+      }
+    };
+    const handleScroll = () => setContextMenu(null);
+
+    window.addEventListener('mousedown', handleOutsideClick);
+    window.addEventListener('keydown', handleEscape);
+    window.addEventListener('scroll', handleScroll, true);
+
+    return () => {
+      window.removeEventListener('mousedown', handleOutsideClick);
+      window.removeEventListener('keydown', handleEscape);
+      window.removeEventListener('scroll', handleScroll, true);
+    };
+  }, [contextMenu]);
+
   return (
     <div className="flex items-center border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 w-full overflow-x-auto scrollbar-hide">
       {tabs.map((tab) => {
@@ -60,6 +89,14 @@ export default function TabsBar({
           <div
             key={tab.id}
             onClick={() => onSelect(tab.id)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setContextMenu({
+                tabId: tab.id,
+                x: e.clientX,
+                y: e.clientY,
+              });
+            }}
             draggable={editingTabId !== tab.id}
             onDragStart={(e) => {
               setDraggingTabId(tab.id);
@@ -148,6 +185,51 @@ export default function TabsBar({
       >
         <Plus className="w-4 h-4" />
       </button>
+      {contextMenu && (
+        <div
+          className="fixed z-50 min-w-[160px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg p-1 text-sm"
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+          role="menu"
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            className="w-full text-left px-2 py-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200"
+            onClick={() => {
+              onNew();
+              setContextMenu(null);
+            }}
+            role="menuitem"
+          >
+            Nova aba
+          </button>
+          <button
+            type="button"
+            className="w-full text-left px-2 py-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200"
+            onClick={() => {
+              onDuplicate(contextMenu.tabId);
+              setContextMenu(null);
+            }}
+            role="menuitem"
+          >
+            Duplicar aba
+          </button>
+          <button
+            type="button"
+            className="w-full text-left px-2 py-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200"
+            onClick={() => {
+              const tabToRename = tabs.find((tab) => tab.id === contextMenu.tabId);
+              if (tabToRename) {
+                beginRename(tabToRename);
+              }
+              setContextMenu(null);
+            }}
+            role="menuitem"
+          >
+            Renomear aba
+          </button>
+        </div>
+      )}
     </div>
   );
 }

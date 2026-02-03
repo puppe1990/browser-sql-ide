@@ -144,6 +144,14 @@ function formatRowCount(rowCount: number) {
   return `${rowCount} row${rowCount !== 1 ? 's' : ''} affected`;
 }
 
+function extractRefreshedMaterializedView(statement: string) {
+  const remainder = statement.replace(/^REFRESH\s+MATERIALIZED\s+VIEW\s+/i, '');
+  const withoutConcurrent = remainder.replace(/^\s*CONCURRENTLY\s+/i, '');
+  const withoutWith = withoutConcurrent.split(/\s+WITH\s+/i)[0] ?? '';
+  const cleaned = withoutWith.replace(/;$/, '').trim();
+  return cleaned || null;
+}
+
 export function getEmptyResultFeedback(
   query?: string,
   rowCount: number = 0
@@ -162,7 +170,11 @@ export function getEmptyResultFeedback(
   }
 
   if (/^REFRESH\s+MATERIALIZED\s+VIEW\b/.test(upperStatement)) {
-    return { title: 'Materialized view refreshed successfully' };
+    const viewName = extractRefreshedMaterializedView(statement);
+    return {
+      title: 'Materialized view refreshed successfully',
+      detail: viewName ? `View: ${viewName}` : undefined,
+    };
   }
 
   return null;

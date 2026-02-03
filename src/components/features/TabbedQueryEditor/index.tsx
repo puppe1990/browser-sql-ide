@@ -164,6 +164,25 @@ export default function TabbedQueryEditor({
     );
   }, []);
 
+  const duplicateTab = useCallback((tabId: string) => {
+    const sourceIndex = tabs.findIndex((tab) => tab.id === tabId);
+    if (sourceIndex === -1) return;
+    const sourceTab = tabs[sourceIndex];
+    const newTabId = `tab-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    const newTab: Tab = {
+      id: newTabId,
+      name: `${sourceTab.name} copy`,
+      query: sourceTab.query,
+      connectionId: sourceTab.connectionId,
+    };
+
+    const nextTabs = [...tabs];
+    nextTabs.splice(sourceIndex + 1, 0, newTab);
+    setTabs(nextTabs);
+    setActiveTabId(newTabId);
+  }, [tabs]);
+
   const reorderTabs = useCallback((dragId: string, targetId: string) => {
     if (!dragId || !targetId || dragId === targetId) return;
     setTabs((prev) => {
@@ -300,6 +319,7 @@ export default function TabbedQueryEditor({
         onNew={createNewTab}
         onRename={renameTab}
         onReorder={reorderTabs}
+        onDuplicate={duplicateTab}
         connectionColors={connectionColors}
       />
 
