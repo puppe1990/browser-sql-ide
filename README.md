@@ -1,12 +1,12 @@
 # Browser SQL IDE
 
-A web-based SQL IDE for managing database connections, running queries, and comparing results side-by-side. It focuses on PostgreSQL today, with a connector architecture that is ready for other databases.
+A web-based SQL IDE for managing database connections, running queries, and comparing results side-by-side. It currently supports PostgreSQL, SQLite (via file upload), and Turso.
 
 ![Browser SQL IDE Interface](./print.png)
 
 ## Features
 
-- **PostgreSQL-first, extensible connectors**: PostgreSQL support today; connector scaffolding for MySQL, SQLite, and MSSQL
+- **Multiple connectors**: PostgreSQL, SQLite (uploaded `.db/.sqlite/.sqlite3` files), and Turso
 - **Connection management**: create, edit, test, set default, delete; import/export JSON; encrypted credentials
 - **Tabbed query editor**: multi-tab Monaco editor with Ctrl/Cmd+Enter execution and error line highlighting
 - **Split-screen mode**: run two editors in parallel for faster comparisons
@@ -22,7 +22,7 @@ A web-based SQL IDE for managing database connections, running queries, and comp
 - **Frontend**: Next.js 14 (App Router), React 18, TypeScript
 - **Backend**: Next.js Route Handlers (Node.js)
 - **Metadata Storage**: SQLite via better-sqlite3 (`data/ide.db`)
-- **Database Connector**: PostgreSQL (`pg`)
+- **Database Connectors**: PostgreSQL (`pg`), SQLite (`better-sqlite3`), and Turso (`@libsql/client`)
 - **UI**: Tailwind CSS, Lucide React
 - **Editor**: Monaco Editor
 - **Encryption**: crypto-js (AES)
@@ -30,7 +30,7 @@ A web-based SQL IDE for managing database connections, running queries, and comp
 ## Prerequisites
 
 - Node.js 18+ and npm/yarn
-- PostgreSQL database (for testing connections)
+- PostgreSQL database (optional, only if you want PostgreSQL connections)
 
 ## Installation
 
@@ -65,7 +65,10 @@ npm run dev
 ### Connections
 
 1. Click **New Connection** in the Connections panel
-2. Fill in the connection details (host, port, database, username, password, SSL)
+2. Choose the connection type:
+   - PostgreSQL: fill host, port, database, username, password, SSL
+   - SQLite: upload a `.db`, `.sqlite`, or `.sqlite3` file
+   - Turso: fill URL (`libsql://...`) and Auth Token
 3. Click **Create** to save
 4. Use **Test** to verify connectivity
 5. Optionally mark a connection as **Default** for new tabs
@@ -149,7 +152,7 @@ browser-sql-ide/
 
 ## Future Enhancements
 
-- [ ] Support for MySQL, SQLite, and MSSQL connectors
+- [ ] Support for MySQL and MSSQL connectors
 - [ ] Query result charts and graphs
 - [ ] Query autocomplete and suggestions
 - [ ] Database schema browser

@@ -4,6 +4,7 @@ import { encrypt } from '@/lib/encryption';
 import { dbConnector } from '@/lib/database-connectors';
 import { getErrorMessage } from '@/lib/utils';
 import type { DbConnectionRow } from '@/types';
+import { deleteSqliteFileIfManaged, saveUploadedSqliteFile } from '@/lib/sqlite-files';
 
 type ConnectionPayload = {
   name?: string;
@@ -15,7 +16,31 @@ type ConnectionPayload = {
   password?: string;
   ssl?: boolean;
   color?: string;
+  sqliteFile?: File | null;
 };
+
+async function readConnectionPayload(request: NextRequest): Promise<ConnectionPayload> {
+  const contentType = request.headers.get('content-type') || '';
+  if (!contentType.includes('multipart/form-data')) {
+    return (await request.json()) as ConnectionPayload;
+  }
+
+  const form = await request.formData();
+  const sqliteFile = form.get('sqliteFile');
+
+  return {
+    name: (form.get('name') as string) || undefined,
+    type: (form.get('type') as string) || undefined,
+    host: (form.get('host') as string) || undefined,
+    port: form.get('port') ? Number(form.get('port')) : undefined,
+    database: (form.get('database') as string) || undefined,
+    username: (form.get('username') as string) || undefined,
+    password: (form.get('password') as string) || undefined,
+    ssl: form.get('ssl') === 'true',
+    color: (form.get('color') as string) || undefined,
+    sqliteFile: sqliteFile instanceof File ? sqliteFile : null,
+  };
+}
 
 export async function GET(
   request: NextRequest,
@@ -43,8 +68,8 @@ export async function PUT(
 ) {
   try {
     const id = parseInt(params.id);
-    const body = (await request.json()) as ConnectionPayload;
-    const { name, type, host, port, database, username, password, ssl, color } = body;
+    const body = await readConnectionPayload(request);
+    const { name, type, host, port, database, username, password, ssl, color, sqliteFile } = body;
 
     const existing = db
       .prepare('SELECT * FROM connections WHERE id = ?')
@@ -54,14 +79,54 @@ export async function PUT(
       return NextResponse.json({ error: 'Connection not found' }, { status: 404 });
     }
 
-    const encryptedPassword = password ? encrypt(password) : existing.encrypted_password;
-    const nextName = name ?? existing.name;
     const nextType = type ?? existing.type;
-    const nextHost = host ?? existing.host;
-    const nextPort = port ?? existing.port;
-    const nextDatabase = database ?? existing.database;
-    const nextUsername = username ?? existing.username;
-    const nextSsl = ssl !== undefined ? (ssl ? 1 : 0) : existing.ssl;
+    const nextName = name ?? existing.name;
+    let nextHost = host ?? existing.host;
+    let nextPort = port ?? existing.port;
+    let nextDatabase = database ?? existing.database;
+    let nextUsername = username ?? existing.username;
+    let nextPassword = password;
+    let nextSsl = ssl !== undefined ? (ssl ? 1 : 0) : existing.ssl;
+
+    if (nextType === 'sqlite') {
+      if (sqliteFile && sqliteFile.size > 0) {
+        const uploadedPath = await saveUploadedSqliteFile(sqliteFile);
+        if (existing.type === 'sqlite' && existing.database !== uploadedPath) {
+          deleteSqliteFileIfManaged(existing.database);
+        }
+        nextDatabase = uploadedPath;
+      }
+
+      nextHost = 'localfile';
+      nextPort = 0;
+      nextUsername = 'sqlite';
+      nextPassword = nextPassword || 'sqlite';
+      nextSsl = 0;
+    }
+
+    if (nextType === 'turso') {
+      nextPort = Number.isFinite(nextPort) && (nextPort as number) > 0 ? nextPort : 443;
+      nextDatabase = nextDatabase || 'main';
+      nextUsername = nextUsername || 'turso';
+      nextSsl = 1;
+
+      if (!nextPassword && existing.type !== 'turso') {
+        return NextResponse.json(
+          { error: 'Turso auth token is required when changing connection type' },
+          { status: 400 }
+        );
+      }
+    }
+
+    if (existing.type === 'sqlite' && nextType !== 'sqlite') {
+      deleteSqliteFileIfManaged(existing.database);
+    }
+
+    if (!nextName || !nextHost || nextPort === undefined || !Number.isFinite(nextPort) || !nextDatabase || !nextUsername) {
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    }
+
+    const encryptedPassword = nextPassword ? encrypt(nextPassword) : existing.encrypted_password;
     const nextColor =
       typeof color === 'string'
         ? color.trim() || null
@@ -101,8 +166,14 @@ export async function DELETE(
 ) {
   try {
     const id = parseInt(params.id);
-    const { dbConnector } = await import('@/lib/database-connectors');
-    
+    const connection = db
+      .prepare('SELECT * FROM connections WHERE id = ?')
+      .get(id) as DbConnectionRow | undefined;
+
+    if (!connection) {
+      return NextResponse.json({ error: 'Connection not found' }, { status: 404 });
+    }
+
     // Disconnect if connected
     await dbConnector.disconnect(id);
 
@@ -110,6 +181,10 @@ export async function DELETE(
 
     if (result.changes === 0) {
       return NextResponse.json({ error: 'Connection not found' }, { status: 404 });
+    }
+
+    if (connection.type === 'sqlite') {
+      deleteSqliteFileIfManaged(connection.database);
     }
 
     return NextResponse.json({ success: true });

@@ -34,7 +34,7 @@ export async function POST(
     };
 
     // Test connection
-    await dbConnector.connect(connection);
+    await dbConnector.testConnection(connection);
 
     return NextResponse.json({ success: true, message: 'Connection successful' });
   } catch (error: unknown) {

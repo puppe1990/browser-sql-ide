@@ -3,14 +3,16 @@ import type { RowData } from '@/types';
 export function exportToCsv(columns: string[], rows: RowData[]) {
   if (!rows.length) return;
 
-  const headers = columns.join(',');
+  const csvEscape = (value: unknown) => {
+    if (value === null || value === undefined) return '';
+    const raw = typeof value === 'object' ? JSON.stringify(value) : String(value);
+    const escaped = raw.replace(/"/g, '""');
+    return /[",\n\r]/.test(raw) ? `"${escaped}"` : escaped;
+  };
+
+  const headers = columns.map((col) => csvEscape(col)).join(',');
   const lines = rows.map((row) =>
-    columns.map((col) => {
-      const value = row[col];
-      if (value === null || value === undefined) return '';
-      if (typeof value === 'object') return JSON.stringify(value);
-      return String(value).replace(/"/g, '""');
-    }).join(',')
+    columns.map((col) => csvEscape(row[col])).join(',')
   );
 
   const csv = [headers, ...lines].join('\n');

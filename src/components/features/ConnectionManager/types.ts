@@ -22,6 +22,7 @@ export type ConnectionFormData = {
   password: string;
   ssl: boolean;
   color: string;
+  sqliteFile: File | null;
 };
 
 export type TestResult = {

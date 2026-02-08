@@ -28,6 +28,13 @@ export default function ConnectionFormModal({
   onClose,
 }: ConnectionFormModalProps) {
   if (!open) return null;
+  const isSqlite = formData.type === 'sqlite';
+  const isTurso = formData.type === 'turso';
+  const canTest = isSqlite
+    ? Boolean(formData.database || formData.sqliteFile)
+    : isTurso
+    ? Boolean(formData.host && formData.password)
+    : Boolean(formData.host && formData.port && formData.database && formData.username && formData.password);
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -64,79 +71,164 @@ export default function ConnectionFormModal({
             </label>
             <select
               value={formData.type}
-              onChange={(e) => onChange({ ...formData, type: e.target.value })}
+              onChange={(e) => {
+                const nextType = e.target.value;
+                if (nextType === 'sqlite') {
+                  onChange({
+                    ...formData,
+                    type: nextType,
+                    host: 'localfile',
+                    port: 0,
+                    database: '',
+                    username: 'sqlite',
+                    password: formData.password || 'sqlite',
+                    ssl: false,
+                  });
+                  return;
+                }
+
+                if (nextType === 'turso') {
+                  onChange({
+                    ...formData,
+                    type: nextType,
+                    host: '',
+                    port: 443,
+                    database: formData.database || 'main',
+                    username: 'turso',
+                    password: formData.password === 'sqlite' ? '' : formData.password,
+                    ssl: true,
+                    sqliteFile: null,
+                  });
+                  return;
+                }
+
+                onChange({
+                  ...formData,
+                  type: nextType,
+                  host: formData.host === 'localfile' ? '' : formData.host,
+                  port: formData.port === 0 || formData.port === 443 ? 5432 : formData.port,
+                  username: formData.username === 'sqlite' || formData.username === 'turso' ? '' : formData.username,
+                  password: formData.password === 'sqlite' ? '' : formData.password,
+                  sqliteFile: null,
+                  ssl: false,
+                });
+              }}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             >
               <option value="postgresql">PostgreSQL</option>
+              <option value="sqlite">SQLite</option>
+              <option value="turso">Turso</option>
             </select>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Host
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.host}
-                onChange={(e) => onChange({ ...formData, host: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              />
+          {!isSqlite && (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  {isTurso ? 'Turso URL' : 'Host'}
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formData.host}
+                  onChange={(e) => onChange({ ...formData, host: e.target.value })}
+                  placeholder={isTurso ? 'libsql://your-db.turso.io' : ''}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+              </div>
+              {!isTurso && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Port
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    value={formData.port}
+                    onChange={(e) => onChange({ ...formData, port: parseInt(e.target.value, 10) })}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  />
+                </div>
+              )}
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Port
-              </label>
-              <input
-                type="number"
-                required
-                value={formData.port}
-                onChange={(e) => onChange({ ...formData, port: parseInt(e.target.value, 10) })}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              />
-            </div>
-          </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Database
+              {isSqlite ? 'SQLite file path' : isTurso ? 'Database (optional)' : 'Database'}
             </label>
             <input
               type="text"
-              required
+              required={!isSqlite && !isTurso}
               value={formData.database}
               onChange={(e) => onChange({ ...formData, database: e.target.value })}
+              readOnly={isSqlite}
+              placeholder={isTurso ? 'main' : ''}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Username
-            </label>
-            <input
-              type="text"
-              required
-              value={formData.username}
-              onChange={(e) => onChange({ ...formData, username: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-            />
-          </div>
+          {isSqlite && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                SQLite .db file
+              </label>
+              <input
+                type="file"
+                accept=".db,.sqlite,.sqlite3"
+                onClick={(e) => {
+                  e.currentTarget.value = '';
+                }}
+                onChange={(e) => {
+                  const file = e.target.files?.[0] ?? null;
+                  onChange({
+                    ...formData,
+                    sqliteFile: file,
+                    database: file ? file.name : formData.database,
+                  });
+                }}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                {editingConnection
+                  ? 'Upload a new file only if you want to replace the current database.'
+                  : 'Select a SQLite database file to upload.'}
+              </p>
+            </div>
+          )}
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Password
-            </label>
-            <input
-              type="password"
-              required={!editingConnection}
-              value={formData.password}
-              onChange={(e) => onChange({ ...formData, password: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              placeholder={editingConnection ? 'Leave empty to keep current' : ''}
-            />
-          </div>
+          {!isSqlite && !isTurso && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Username
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formData.username}
+                  onChange={(e) => onChange({ ...formData, username: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+              </div>
+            </>
+          )}
+
+          {!isSqlite && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                {isTurso ? 'Auth Token' : 'Password'}
+              </label>
+              <input
+                type="password"
+                required={!editingConnection}
+                value={formData.password}
+                onChange={(e) => onChange({ ...formData, password: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                placeholder={editingConnection ? 'Leave empty to keep current' : ''}
+              />
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -158,27 +250,29 @@ export default function ConnectionFormModal({
             </div>
           </div>
 
-          <div className="flex items-center">
-            <input
-              type="checkbox"
-              id="ssl"
-              checked={formData.ssl}
-              onChange={(e) => onChange({ ...formData, ssl: e.target.checked })}
-              className="w-4 h-4 text-primary-600 rounded"
-            />
-            <label
-              htmlFor="ssl"
-              className="ml-2 text-sm text-gray-700 dark:text-gray-300"
-            >
-              Enable SSL
-            </label>
-          </div>
+          {!isSqlite && !isTurso && (
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="ssl"
+                checked={formData.ssl}
+                onChange={(e) => onChange({ ...formData, ssl: e.target.checked })}
+                className="w-4 h-4 text-primary-600 rounded"
+              />
+              <label
+                htmlFor="ssl"
+                className="ml-2 text-sm text-gray-700 dark:text-gray-300"
+              >
+                Enable SSL
+              </label>
+            </div>
+          )}
 
           <div className="space-y-2">
             <button
               type="button"
               onClick={onTest}
-              disabled={testingForm || !formData.host || !formData.port || !formData.database || !formData.username || !formData.password}
+              disabled={testingForm || !canTest}
               className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {testingForm ? (

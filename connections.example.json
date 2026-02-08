@@ -28,5 +28,15 @@
     "username": "devuser",
     "password": "devpassword",
     "ssl": false
+  },
+  {
+    "name": "Turso Database",
+    "type": "turso",
+    "host": "libsql://your-database-name.turso.io",
+    "port": 443,
+    "database": "main",
+    "username": "turso",
+    "password": "your_turso_auth_token",
+    "ssl": true
   }
 ]

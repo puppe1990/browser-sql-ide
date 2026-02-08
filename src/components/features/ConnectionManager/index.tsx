@@ -44,6 +44,7 @@ export default function ConnectionManager({
     password: '',
     ssl: false,
     color: '#3b82f6',
+    sqliteFile: null,
   });
 
   const loadConnections = useCallback(async () => {
@@ -98,11 +99,33 @@ export default function ConnectionManager({
         ? `/api/connections/${editingConnection.id}`
         : '/api/connections';
       const method = editingConnection ? 'PUT' : 'POST';
+      const isSqlite = formData.type === 'sqlite';
+      const isTurso = formData.type === 'turso';
+      const normalizedFormData = isTurso
+        ? {
+            ...formData,
+            port: 443,
+            database: formData.database || 'main',
+            username: formData.username || 'turso',
+            ssl: true,
+          }
+        : formData;
+      const payload = isSqlite ? new FormData() : JSON.stringify(normalizedFormData);
+
+      if (isSqlite) {
+        (payload as FormData).append('name', formData.name);
+        (payload as FormData).append('type', formData.type);
+        (payload as FormData).append('database', formData.database);
+        (payload as FormData).append('color', formData.color);
+        if (formData.sqliteFile) {
+          (payload as FormData).append('sqliteFile', formData.sqliteFile);
+        }
+      }
 
       const response = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        headers: isSqlite ? undefined : { 'Content-Type': 'application/json' },
+        body: payload,
       });
 
       if (response.ok) {
@@ -178,11 +201,24 @@ export default function ConnectionManager({
   };
 
   const handleTestForm = async () => {
+    const isSqlite = formData.type === 'sqlite';
+    const isTurso = formData.type === 'turso';
+
     // Validate required fields
-    if (!formData.host || !formData.port || !formData.database || !formData.username || !formData.password) {
+    if (
+      (!isSqlite &&
+        !isTurso &&
+        (!formData.host || !formData.port || !formData.database || !formData.username || !formData.password)) ||
+      (isTurso && (!formData.host || !formData.password)) ||
+      (isSqlite && !formData.database && !formData.sqliteFile)
+    ) {
       setTestResult({ 
         success: false, 
-        message: 'Please fill in all required fields (host, port, database, username, password)' 
+        message: isSqlite
+          ? 'Please upload a SQLite .db file'
+          : isTurso
+          ? 'Please fill in Turso URL and auth token'
+          : 'Please fill in all required fields (host, port, database, username, password)' 
       });
       return;
     }
@@ -191,10 +227,29 @@ export default function ConnectionManager({
     setTestResult(null);
 
     try {
+      const normalizedFormData = isTurso
+        ? {
+            ...formData,
+            port: 443,
+            database: formData.database || 'main',
+            username: formData.username || 'turso',
+            ssl: true,
+          }
+        : formData;
+      const payload = isSqlite ? new FormData() : JSON.stringify(normalizedFormData);
+      if (isSqlite) {
+        (payload as FormData).append('name', formData.name || 'SQLite');
+        (payload as FormData).append('type', 'sqlite');
+        (payload as FormData).append('database', formData.database);
+        if (formData.sqliteFile) {
+          (payload as FormData).append('sqliteFile', formData.sqliteFile);
+        }
+      }
+
       const response = await fetch('/api/connections/test', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        headers: isSqlite ? undefined : { 'Content-Type': 'application/json' },
+        body: payload,
       });
 
       const data = await response.json();
@@ -222,6 +277,7 @@ export default function ConnectionManager({
       password: '', // Don't pre-fill password
       ssl: connection.ssl,
       color: connection.color ?? '#3b82f6',
+      sqliteFile: null,
     });
     setShowModal(true);
   };
@@ -237,6 +293,7 @@ export default function ConnectionManager({
       password: '',
       ssl: false,
       color: '#3b82f6',
+      sqliteFile: null,
     });
     setEditingConnection(null);
     setTestResult(null);
@@ -297,8 +354,18 @@ export default function ConnectionManager({
       const errors: string[] = [];
 
       for (const conn of connectionsToImport) {
+        const type = conn.type || 'postgresql';
+        const isSqlite = type === 'sqlite';
+        const isTurso = type === 'turso';
+
         // Validate required fields
-        if (!conn.name || !conn.host || !conn.port || !conn.database || !conn.username) {
+        if (
+          !conn.name ||
+          (!isSqlite &&
+            !isTurso &&
+            (!conn.host || !conn.port || !conn.database || !conn.username)) ||
+          (isTurso && (!conn.host || !conn.password))
+        ) {
           errors.push(`Connection "${conn.name || 'Unnamed'}" is missing required fields`);
           errorCount++;
           continue;
@@ -310,13 +377,13 @@ export default function ConnectionManager({
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               name: conn.name,
-              type: conn.type || 'postgresql',
+              type,
               host: conn.host,
-              port: conn.port,
-              database: conn.database,
-              username: conn.username,
-              password: conn.password || '', // User will need to set password
-              ssl: conn.ssl || false,
+              port: isTurso ? 443 : conn.port,
+              database: isTurso ? (conn.database || 'main') : conn.database,
+              username: isTurso ? (conn.username || 'turso') : conn.username,
+              password: conn.password || '',
+              ssl: isTurso ? true : (conn.ssl || false),
               color: conn.color,
             }),
           });

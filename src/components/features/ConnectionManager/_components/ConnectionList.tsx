@@ -242,7 +242,11 @@ export default function ConnectionList({
                   )}
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-mono truncate">
-                  {connection.type}://{connection.username}@{connection.host}:{connection.port}/{connection.database}
+                  {connection.type === 'sqlite'
+                    ? `${connection.type}://${connection.database}`
+                    : connection.type === 'turso'
+                    ? `${connection.host}/${connection.database}`
+                    : `${connection.type}://${connection.username}@${connection.host}:${connection.port}/${connection.database}`}
                 </p>
               </div>
               <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">

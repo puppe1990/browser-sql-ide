@@ -2,13 +2,15 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { FormEvent } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Code2, Copy, Loader2, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
 import type { QueryResult, RowData } from '@/types';
 import ResultsHeader from './_components/ResultsHeader';
 import ResultsTable from './_components/ResultsTable';
+import type { DisplayRow, SelectedCell } from './_components/ResultsTable';
 import InsertIntoConnectionModal from './_components/InsertIntoConnectionModal';
 import {
   buildInsertQuery,
+  escapeSqlValue,
   extractTableName,
   exportToCsv,
   exportToInsertStatements,
@@ -17,6 +19,7 @@ import {
   parseInsertStatements,
 } from './utils';
 import { useConnections } from '@/components/features/QueryEditor/helpers';
+import Tooltip from '@/components/ui/Tooltip';
 
 interface DataVisualizationProps {
   result: QueryResult;
@@ -31,6 +34,16 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(result.hasMore ?? false);
   const [totalCount, setTotalCount] = useState(result.totalCount);
+  const [editMode, setEditMode] = useState(false);
+  const [editedCells, setEditedCells] = useState<Record<number, RowData>>({});
+  const [addedRows, setAddedRows] = useState<RowData[]>([]);
+  const [deletedRowIndices, setDeletedRowIndices] = useState<number[]>([]);
+  const [selectedCell, setSelectedCell] = useState<SelectedCell | null>(null);
+  const [keyColumns, setKeyColumns] = useState<string[]>([]);
+  const [isSavingEdits, setIsSavingEdits] = useState(false);
+  const [showScriptModal, setShowScriptModal] = useState(false);
+  const [showCellEditor, setShowCellEditor] = useState(false);
+  const [cellEditorValue, setCellEditorValue] = useState('');
   const [showInsertModal, setShowInsertModal] = useState(false);
   const [insertTableName, setInsertTableName] = useState('');
   const [isInserting, setIsInserting] = useState(false);
@@ -40,6 +53,7 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const currentOffset = useRef(result.rows.length);
+  const originalRowsRef = useRef<RowData[]>(result.rows);
   const { connections, selectedConnectionId, setSelectedConnectionId } = useConnections({});
   const connectionName = useMemo(() => {
     if (result.connectionName) return result.connectionName;
@@ -59,6 +73,15 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
     setHasMore(result.hasMore ?? false);
     setTotalCount(result.totalCount);
     currentOffset.current = result.rows.length;
+    originalRowsRef.current = result.rows;
+    setEditMode(false);
+    setEditedCells({});
+    setAddedRows([]);
+    setDeletedRowIndices([]);
+    setSelectedCell(null);
+    setKeyColumns([]);
+    setShowScriptModal(false);
+    setShowCellEditor(false);
   }, [result]);
 
   useEffect(() => {
@@ -93,6 +116,7 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
       if (data.success && data.result) {
         const newRows = data.result.rows || [];
         setAllRows((prev) => [...prev, ...newRows]);
+        originalRowsRef.current = [...originalRowsRef.current, ...newRows];
         setHasMore(data.result.hasMore ?? false);
         setTotalCount(data.result.totalCount);
         currentOffset.current += newRows.length;
@@ -135,7 +159,337 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
       ? 'Importing...'
       : isInserting
         ? 'Inserting...'
+        : isSavingEdits
+          ? 'Salvando...'
         : null;
+
+  const requiresKeyColumns = Object.keys(editedCells).length > 0 || deletedRowIndices.length > 0;
+  const hasEditChanges =
+    Object.keys(editedCells).length > 0 || addedRows.length > 0 || deletedRowIndices.length > 0;
+  const canSaveEdits =
+    editMode &&
+    hasEditChanges &&
+    Boolean(tableName) &&
+    Boolean(sourceConnectionId) &&
+    (!requiresKeyColumns || keyColumns.length > 0);
+
+  const displayedRows: DisplayRow[] = useMemo(() => {
+    const baseRows = allRows.map((row, rowIndex) => {
+      const edits = editedCells[rowIndex];
+      const data = edits ? { ...row, ...edits } : row;
+      return {
+        id: `row-${rowIndex}`,
+        rowIndex,
+        isNew: false,
+        data,
+      };
+    });
+    const newRows = addedRows.map((row, rowIndex) => ({
+      id: `new-${rowIndex}`,
+      rowIndex,
+      isNew: true,
+      data: row,
+    }));
+    return [...baseRows, ...newRows];
+  }, [allRows, addedRows, editedCells]);
+
+  const parseInputValue = useCallback((rawValue: unknown, originalValue: unknown) => {
+    if (rawValue === null) return null;
+    if (typeof rawValue !== 'string') return rawValue;
+    if (originalValue === null || originalValue === undefined) return rawValue;
+
+    if (typeof originalValue === 'number') {
+      const parsed = Number(rawValue);
+      return Number.isNaN(parsed) ? rawValue : parsed;
+    }
+
+    if (typeof originalValue === 'boolean') {
+      if (rawValue.toLowerCase() === 'true') return true;
+      if (rawValue.toLowerCase() === 'false') return false;
+      return rawValue;
+    }
+
+    if (typeof originalValue === 'object') {
+      try {
+        return JSON.parse(rawValue);
+      } catch {
+        return rawValue;
+      }
+    }
+
+    return rawValue;
+  }, []);
+
+  const handleSelectCell = useCallback((cell: SelectedCell) => {
+    setSelectedCell(cell);
+    if (cell.isNew) {
+      const value = addedRows[cell.rowIndex]?.[cell.column];
+      setCellEditorValue(value === null || value === undefined ? '' : String(value));
+      return;
+    }
+    const original = originalRowsRef.current[cell.rowIndex]?.[cell.column];
+    const edited = editedCells[cell.rowIndex]?.[cell.column];
+    const value = edited !== undefined ? edited : original;
+    setCellEditorValue(value === null || value === undefined ? '' : String(value));
+  }, [addedRows, editedCells]);
+
+  const handleCellChange = useCallback(
+    (cell: SelectedCell, rawValue: unknown) => {
+      if (cell.isNew) {
+        setAddedRows((prev) => {
+          const next = [...prev];
+          const row = { ...(next[cell.rowIndex] ?? {}) };
+          row[cell.column] = rawValue;
+          next[cell.rowIndex] = row;
+          return next;
+        });
+        return;
+      }
+
+      const originalRow = originalRowsRef.current[cell.rowIndex] ?? {};
+      const parsedValue = parseInputValue(rawValue, originalRow[cell.column]);
+      const originalValue = originalRow[cell.column];
+      const valuesEqual =
+        typeof originalValue === 'object' && typeof parsedValue === 'object'
+          ? JSON.stringify(originalValue) === JSON.stringify(parsedValue)
+          : Object.is(originalValue, parsedValue);
+
+      setEditedCells((prev) => {
+        const existing = prev[cell.rowIndex] ? { ...prev[cell.rowIndex] } : {};
+        if (valuesEqual) {
+          delete existing[cell.column];
+        } else {
+          existing[cell.column] = parsedValue;
+        }
+
+        if (Object.keys(existing).length === 0) {
+          const next = { ...prev };
+          delete next[cell.rowIndex];
+          return next;
+        }
+
+        return { ...prev, [cell.rowIndex]: existing };
+      });
+    },
+    [parseInputValue]
+  );
+
+  const handleAddRow = useCallback(() => {
+    if (result.columns.length === 0) return;
+    const emptyRow = result.columns.reduce<RowData>((acc, column) => {
+      acc[column] = null;
+      return acc;
+    }, {});
+    setAddedRows((prev) => {
+      const next = [...prev, emptyRow];
+      const newIndex = next.length - 1;
+      setSelectedCell({ rowIndex: newIndex, column: result.columns[0], isNew: true });
+      setCellEditorValue('');
+      return next;
+    });
+    setEditMode(true);
+  }, [result.columns]);
+
+  const handleDuplicateRow = useCallback(() => {
+    if (!selectedCell || result.columns.length === 0) return;
+    const sourceRow = selectedCell.isNew
+      ? addedRows[selectedCell.rowIndex]
+      : displayedRows.find((row) => row.rowIndex === selectedCell.rowIndex && !row.isNew)?.data;
+    if (!sourceRow) return;
+    setAddedRows((prev) => {
+      const next = [...prev, { ...sourceRow }];
+      const newIndex = next.length - 1;
+      setSelectedCell({ rowIndex: newIndex, column: result.columns[0], isNew: true });
+      return next;
+    });
+    setEditMode(true);
+  }, [addedRows, displayedRows, result.columns, selectedCell]);
+
+  const handleToggleDeleteRow = useCallback(() => {
+    if (!selectedCell || selectedCell.isNew) {
+      if (selectedCell?.isNew) {
+        setAddedRows((prev) => prev.filter((_, idx) => idx !== selectedCell.rowIndex));
+        setSelectedCell(null);
+      }
+      return;
+    }
+
+    setDeletedRowIndices((prev) => {
+      if (prev.includes(selectedCell.rowIndex)) {
+        return prev.filter((idx) => idx !== selectedCell.rowIndex);
+      }
+      return [...prev, selectedCell.rowIndex];
+    });
+  }, [selectedCell]);
+
+  const handleSetNull = useCallback(() => {
+    if (!selectedCell) return;
+    handleCellChange(selectedCell, null);
+    setCellEditorValue('');
+  }, [handleCellChange, selectedCell]);
+
+  const handleToggleKeyColumn = useCallback((column: string) => {
+    setKeyColumns((prev) => (prev.includes(column) ? prev.filter((col) => col !== column) : [...prev, column]));
+  }, []);
+
+  const buildWhereClause = useCallback(
+    (row: RowData) => {
+      if (keyColumns.length === 0) return null;
+      const clauses = keyColumns.map((col) => {
+        const value = row[col];
+        if (value === null || value === undefined) {
+          return `${col} IS NULL`;
+        }
+        return `${col} = ${escapeSqlValue(value)}`;
+      });
+      return clauses.join(' AND ');
+    },
+    [keyColumns]
+  );
+
+  const buildChangeScript = useCallback(() => {
+    if (!tableName) {
+      return { statements: [], errors: ['Não foi possível identificar a tabela a partir da query.'] };
+    }
+
+    const statements: string[] = [];
+    const errors: string[] = [];
+
+    deletedRowIndices.forEach((rowIndex) => {
+      const originalRow = originalRowsRef.current[rowIndex];
+      if (!originalRow) return;
+      const whereClause = buildWhereClause(originalRow);
+      if (!whereClause) {
+        errors.push('Defina ao menos uma coluna chave para remover linhas.');
+        return;
+      }
+      statements.push(`DELETE FROM ${tableName} WHERE ${whereClause};`);
+    });
+
+    Object.entries(editedCells).forEach(([rowIndexKey, changes]) => {
+      const rowIndex = Number(rowIndexKey);
+      if (deletedRowIndices.includes(rowIndex)) return;
+      const originalRow = originalRowsRef.current[rowIndex];
+      if (!originalRow) return;
+      const columnsToUpdate = Object.keys(changes);
+      if (columnsToUpdate.length === 0) return;
+      const whereClause = buildWhereClause(originalRow);
+      if (!whereClause) {
+        errors.push('Defina ao menos uma coluna chave para atualizar linhas.');
+        return;
+      }
+      const setClause = columnsToUpdate
+        .map((col) => `${col} = ${escapeSqlValue(changes[col])}`)
+        .join(', ');
+      statements.push(`UPDATE ${tableName} SET ${setClause} WHERE ${whereClause};`);
+    });
+
+    addedRows.forEach((row) => {
+      const values = result.columns.map((col) => escapeSqlValue(row[col]));
+      statements.push(`INSERT INTO ${tableName} (${result.columns.join(', ')}) VALUES (${values.join(', ')});`);
+    });
+
+    return { statements, errors };
+  }, [addedRows, buildWhereClause, deletedRowIndices, editedCells, result.columns, tableName]);
+
+  const applyChangesToRows = useCallback(
+    (baseRows: RowData[]) => {
+      let nextRows = [...baseRows];
+      Object.entries(editedCells).forEach(([rowIndexKey, changes]) => {
+        const rowIndex = Number(rowIndexKey);
+        if (deletedRowIndices.includes(rowIndex)) return;
+        if (!nextRows[rowIndex]) return;
+        nextRows[rowIndex] = { ...nextRows[rowIndex], ...changes };
+      });
+      const sortedDeletes = [...deletedRowIndices].sort((a, b) => b - a);
+      sortedDeletes.forEach((rowIndex) => {
+        if (nextRows[rowIndex]) {
+          nextRows.splice(rowIndex, 1);
+        }
+      });
+      if (addedRows.length > 0) {
+        nextRows = [...nextRows, ...addedRows];
+      }
+      return nextRows;
+    },
+    [addedRows, deletedRowIndices, editedCells]
+  );
+
+  const handleSaveEdits = useCallback(async () => {
+    if (!sourceConnectionId) {
+      alert('Selecione uma conexão antes de salvar.');
+      return;
+    }
+
+    const { statements, errors } = buildChangeScript();
+    if (errors.length > 0) {
+      alert(errors[0]);
+      return;
+    }
+
+    if (statements.length === 0) {
+      alert('Nenhuma alteração para salvar.');
+      return;
+    }
+
+    setIsSavingEdits(true);
+    try {
+      for (const statement of statements) {
+        const response = await fetch('/api/query/execute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            connectionId: sourceConnectionId,
+            query: statement,
+          }),
+        });
+        const data = await response.json();
+        if (!data.success) {
+          throw new Error(data.error || 'Falha ao executar alterações');
+        }
+      }
+
+      const nextRows = applyChangesToRows(allRows);
+      setAllRows(nextRows);
+
+      setTotalCount((prev) => {
+        if (prev === undefined) return prev;
+        return prev + addedRows.length - deletedRowIndices.length;
+      });
+
+      originalRowsRef.current = [...nextRows];
+      currentOffset.current = nextRows.length;
+
+      setEditedCells({});
+      setAddedRows([]);
+      setDeletedRowIndices([]);
+      setSelectedCell(null);
+    } catch (error) {
+      console.error('Failed to save edits:', error);
+      alert(error instanceof Error ? error.message : 'Falha ao salvar alterações.');
+    } finally {
+      setIsSavingEdits(false);
+    }
+  }, [
+    applyChangesToRows,
+    addedRows,
+    allRows,
+    buildChangeScript,
+    deletedRowIndices,
+    sourceConnectionId,
+  ]);
+
+  const handleCancelEdits = useCallback(() => {
+    setEditedCells({});
+    setAddedRows([]);
+    setDeletedRowIndices([]);
+    setSelectedCell(null);
+  }, []);
+
+  const scriptPreview = useMemo(() => {
+    const { statements } = buildChangeScript();
+    return statements.join('\n');
+  }, [buildChangeScript]);
 
   const fetchAllRowsForInsert = useCallback(async () => {
     if (!hasMore) return allRows;
@@ -508,6 +862,139 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
         isExporting={isExporting}
       />
 
+      <div className="flex items-center justify-between gap-3 px-4 py-2 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+        <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+          <button
+            className={`inline-flex items-center gap-1.5 rounded px-2 py-1 transition-colors ${
+              editMode
+                ? 'bg-blue-600 text-white'
+                : 'border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+            onClick={() => setEditMode((prev) => !prev)}
+          >
+            <Pencil className="w-3.5 h-3.5" />
+            {editMode ? 'Editando' : 'Editar'}
+          </button>
+          <div className="text-[11px] text-slate-500 dark:text-slate-400">
+            {tableName ? `Tabela: ${tableName}` : 'Tabela não detectada'}
+          </div>
+          {requiresKeyColumns && keyColumns.length === 0 && (
+            <div className="text-[11px] text-amber-600 dark:text-amber-400">
+              Selecione colunas-chave no cabeçalho para salvar atualizações.
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-1">
+          <Tooltip text="Adicionar linha">
+            <button
+              onClick={handleAddRow}
+              disabled={!editMode}
+              className={`p-1.5 rounded transition-colors ${
+                editMode
+                  ? 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  : 'text-slate-400 dark:text-slate-600 cursor-not-allowed'
+              }`}
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+          </Tooltip>
+          <Tooltip text="Duplicar linha selecionada">
+            <button
+              onClick={handleDuplicateRow}
+              disabled={!editMode || !selectedCell}
+              className={`p-1.5 rounded transition-colors ${
+                editMode && selectedCell
+                  ? 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  : 'text-slate-400 dark:text-slate-600 cursor-not-allowed'
+              }`}
+            >
+              <Copy className="w-3.5 h-3.5" />
+            </button>
+          </Tooltip>
+          <Tooltip text="Remover linha selecionada">
+            <button
+              onClick={handleToggleDeleteRow}
+              disabled={!editMode || !selectedCell}
+              className={`p-1.5 rounded transition-colors ${
+                editMode && selectedCell
+                  ? 'text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10'
+                  : 'text-slate-400 dark:text-slate-600 cursor-not-allowed'
+              }`}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </Tooltip>
+          <Tooltip text="Definir célula como NULL">
+            <button
+              onClick={handleSetNull}
+              disabled={!editMode || !selectedCell}
+              className={`p-1.5 rounded transition-colors ${
+                editMode && selectedCell
+                  ? 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  : 'text-slate-400 dark:text-slate-600 cursor-not-allowed'
+              }`}
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </Tooltip>
+          <Tooltip text="Editar célula em modal">
+            <button
+              onClick={() => {
+                if (!selectedCell) return;
+                setShowCellEditor(true);
+              }}
+              disabled={!editMode || !selectedCell}
+              className={`p-1.5 rounded transition-colors ${
+                editMode && selectedCell
+                  ? 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  : 'text-slate-400 dark:text-slate-600 cursor-not-allowed'
+              }`}
+            >
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
+          </Tooltip>
+          <Tooltip text="Ver SQL gerado">
+            <button
+              onClick={() => setShowScriptModal(true)}
+              disabled={!editMode}
+              className={`p-1.5 rounded transition-colors ${
+                editMode
+                  ? 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  : 'text-slate-400 dark:text-slate-600 cursor-not-allowed'
+              }`}
+            >
+              <Code2 className="w-3.5 h-3.5" />
+            </button>
+          </Tooltip>
+          <Tooltip text="Salvar alterações">
+            <button
+              onClick={handleSaveEdits}
+              disabled={!canSaveEdits || isSavingEdits}
+              className={`p-1.5 rounded transition-colors ${
+                canSaveEdits && !isSavingEdits
+                  ? 'text-emerald-600 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-500/10'
+                  : 'text-slate-400 dark:text-slate-600 cursor-not-allowed'
+              }`}
+            >
+              <Save className="w-3.5 h-3.5" />
+            </button>
+          </Tooltip>
+          <Tooltip text="Cancelar alterações">
+            <button
+              onClick={handleCancelEdits}
+              disabled={!editMode || !hasEditChanges}
+              className={`p-1.5 rounded transition-colors ${
+                editMode && hasEditChanges
+                  ? 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  : 'text-slate-400 dark:text-slate-600 cursor-not-allowed'
+              }`}
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </Tooltip>
+        </div>
+      </div>
+
       <div ref={scrollContainerRef} className="flex-1 overflow-auto relative">
         {allRows.length === 0 ? (
           <div className="flex items-center justify-center h-full">
@@ -516,9 +1003,17 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
         ) : (
           <ResultsTable
             columns={result.columns}
-            rows={allRows}
+            rows={displayedRows}
             isLoadingMore={isLoadingMore}
             hasMore={hasMore}
+            editMode={editMode}
+            selectedCell={selectedCell}
+            editedCells={editedCells}
+            deletedRowIndices={deletedRowIndices}
+            keyColumns={keyColumns}
+            onSelectCell={handleSelectCell}
+            onCellChange={handleCellChange}
+            onToggleKeyColumn={handleToggleKeyColumn}
           />
         )}
       </div>
@@ -539,6 +1034,80 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
         onExportInsert={handleExportInsert}
         onClose={() => setShowInsertModal(false)}
       />
+
+      {showCellEditor && selectedCell && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm">
+          <div className="w-full max-w-xl rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 shadow-xl">
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                Editar célula • {selectedCell.column}
+              </div>
+              <button
+                onClick={() => setShowCellEditor(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <textarea
+              className="w-full min-h-[140px] text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+              value={cellEditorValue}
+              onChange={(event) => setCellEditorValue(event.target.value)}
+            />
+            <div className="flex items-center justify-end gap-2 mt-3">
+              <button
+                onClick={() => setShowCellEditor(false)}
+                className="px-3 py-1.5 text-xs rounded border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  if (!selectedCell) return;
+                  handleCellChange(selectedCell, cellEditorValue);
+                  setShowCellEditor(false);
+                }}
+                className="px-3 py-1.5 text-xs rounded bg-blue-600 text-white hover:bg-blue-700"
+              >
+                Aplicar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showScriptModal && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm">
+          <div className="w-full max-w-2xl rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 shadow-xl">
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                SQL gerado para salvar alterações
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={async () => {
+                    if (!scriptPreview) return;
+                    await navigator.clipboard.writeText(scriptPreview);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-2 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                >
+                  <Copy className="w-3 h-3" />
+                  Copiar
+                </button>
+                <button
+                  onClick={() => setShowScriptModal(false)}
+                  className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+            <pre className="text-xs whitespace-pre-wrap rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-3 py-2 max-h-[50vh] overflow-auto">
+              {scriptPreview || 'Nenhuma alteração para mostrar.'}
+            </pre>
+          </div>
+        </div>
+      )}
 
       {overlayMessage && (
         <div className="absolute inset-0 z-40 flex items-center justify-center bg-white/70 dark:bg-slate-900/70 backdrop-blur-sm">
