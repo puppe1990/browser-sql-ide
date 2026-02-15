@@ -1,24 +1,44 @@
-import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
 
+type BetterSqliteDatabase = import('better-sqlite3').Database;
+type BetterSqliteModule = typeof import('better-sqlite3');
+
 const dbPath = path.join(process.cwd(), 'data', 'ide.db');
 const dbDir = path.dirname(dbPath);
+let dbInstance: BetterSqliteDatabase | null = null;
+let dbInitError: Error | null = null;
 
-// Ensure data directory exists
-if (!fs.existsSync(dbDir)) {
-  fs.mkdirSync(dbDir, { recursive: true });
+function ensureDataDirectory() {
+  if (!fs.existsSync(dbDir)) {
+    fs.mkdirSync(dbDir, { recursive: true });
+  }
 }
 
-const db = new Database(dbPath);
+function loadBetterSqlite3(): BetterSqliteModule {
+  const dynamicRequire = new Function('return require')() as NodeRequire;
+  return dynamicRequire('better-sqlite3') as BetterSqliteModule;
+}
 
-// Enable foreign keys
-db.pragma('foreign_keys = ON');
+export function formatDatabaseInitError(cause: unknown): string {
+  const causeMessage = cause instanceof Error ? cause.message : String(cause);
+  const isNodeModuleVersionMismatch = causeMessage.includes('NODE_MODULE_VERSION');
+
+  if (!isNodeModuleVersionMismatch) {
+    return `Failed to initialize database: ${causeMessage}`;
+  }
+
+  return [
+    'Failed to initialize database: better-sqlite3 native binding is compiled for a different Node.js version.',
+    'Rebuild dependencies for the active Node version (for example: npm rebuild better-sqlite3).',
+    `Original error: ${causeMessage}`,
+  ].join(' ');
+}
 
 // Initialize database schema
-export function initializeDatabase() {
+export function initializeDatabase(database: BetterSqliteDatabase) {
   // Connections table
-  db.exec(`
+  database.exec(`
     CREATE TABLE IF NOT EXISTS connections (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -35,16 +55,16 @@ export function initializeDatabase() {
     )
   `);
 
-  const connectionColumns = db
+  const connectionColumns = database
     .prepare("PRAGMA table_info(connections)")
     .all() as Array<{ name: string }>;
   const hasColorColumn = connectionColumns.some((column) => column.name === 'color');
   if (!hasColorColumn) {
-    db.exec('ALTER TABLE connections ADD COLUMN color TEXT');
+    database.exec('ALTER TABLE connections ADD COLUMN color TEXT');
   }
 
   // Saved queries table
-  db.exec(`
+  database.exec(`
     CREATE TABLE IF NOT EXISTS saved_queries (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       connection_id INTEGER,
@@ -59,7 +79,7 @@ export function initializeDatabase() {
   `);
 
   // Query history table
-  db.exec(`
+  database.exec(`
     CREATE TABLE IF NOT EXISTS query_history (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       connection_id INTEGER,
@@ -73,14 +93,50 @@ export function initializeDatabase() {
   `);
 
   // Create indexes
-  db.exec(`
+  database.exec(`
     CREATE INDEX IF NOT EXISTS idx_saved_queries_connection ON saved_queries(connection_id);
     CREATE INDEX IF NOT EXISTS idx_query_history_connection ON query_history(connection_id);
     CREATE INDEX IF NOT EXISTS idx_query_history_executed_at ON query_history(executed_at);
   `);
 }
 
-// Initialize on import
-initializeDatabase();
+function createDatabase(): BetterSqliteDatabase {
+  ensureDataDirectory();
+  const Database = loadBetterSqlite3();
+  const database = new Database(dbPath) as BetterSqliteDatabase;
+  database.pragma('foreign_keys = ON');
+  initializeDatabase(database);
+  return database;
+}
+
+export function getDb(): BetterSqliteDatabase {
+  if (dbInstance) {
+    return dbInstance;
+  }
+
+  if (dbInitError) {
+    throw dbInitError;
+  }
+
+  try {
+    dbInstance = createDatabase();
+    return dbInstance;
+  } catch (cause) {
+    dbInitError = new Error(formatDatabaseInitError(cause));
+    dbInitError.name = 'DatabaseInitializationError';
+    throw dbInitError;
+  }
+}
+
+const db = new Proxy({} as BetterSqliteDatabase, {
+  get(_target, prop) {
+    const instance = getDb();
+    const properties = instance as unknown as Record<PropertyKey, unknown>;
+    const value = properties[prop];
+    return typeof value === 'function'
+      ? (value as (...args: unknown[]) => unknown).bind(instance)
+      : value;
+  },
+});
 
 export default db;
