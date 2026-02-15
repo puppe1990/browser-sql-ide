@@ -6,6 +6,8 @@ import { getErrorMessage } from '@/lib/utils';
 import {
   addPaginationToQuery,
   getTotalCount,
+  isRowReturningQuery,
+  parseQueryTotalCount,
   removePaginationFromQuery,
 } from '@/lib/database-connectors/pagination';
 import {
@@ -100,8 +102,7 @@ class DatabaseConnector {
       let totalCount: number | undefined = undefined;
       let hasMore = false;
 
-      const upperQuery = query.trim().toUpperCase();
-      if (upperQuery.startsWith('SELECT') && limit !== undefined) {
+      if (isRowReturningQuery(query) && limit !== undefined) {
         // Get total count before pagination
         totalCount = await getTotalCount(this.connect.bind(this), connection, query);
 
@@ -211,14 +212,15 @@ class DatabaseConnector {
     let totalCount: number | undefined = undefined;
     let hasMore = false;
 
-    if (trimmedQuery.toUpperCase().startsWith('SELECT') && limit !== undefined) {
+    if (isRowReturningQuery(trimmedQuery) && limit !== undefined) {
       const queryWithoutPagination = removePaginationFromQuery(trimmedQuery);
       const queryWithoutSemicolon = queryWithoutPagination.endsWith(';')
         ? queryWithoutPagination.slice(0, -1).trim()
         : queryWithoutPagination;
       const countQuery = `SELECT COUNT(*) as total FROM (${queryWithoutSemicolon}) as count_query`;
       const totalRow = db.prepare(countQuery).get() as { total?: number } | undefined;
-      totalCount = Number(totalRow?.total ?? 0);
+      const parsedCount = parseQueryTotalCount(totalRow?.total);
+      totalCount = parsedCount ?? 0;
 
       queryToExecute = addPaginationToQuery(query, offset, limit);
       hasMore = offset + limit < totalCount;
@@ -302,7 +304,7 @@ class DatabaseConnector {
     let totalCount: number | undefined = undefined;
     let hasMore = false;
 
-    if (trimmedQuery.toUpperCase().startsWith('SELECT') && limit !== undefined) {
+    if (isRowReturningQuery(trimmedQuery) && limit !== undefined) {
       const queryWithoutPagination = removePaginationFromQuery(trimmedQuery);
       const queryWithoutSemicolon = queryWithoutPagination.endsWith(';')
         ? queryWithoutPagination.slice(0, -1).trim()
@@ -310,7 +312,8 @@ class DatabaseConnector {
       const countQuery = `SELECT COUNT(*) as total FROM (${queryWithoutSemicolon}) as count_query`;
       const countResult = await client.execute(countQuery);
       const totalValue = countResult.rows[0]?.[0] ?? countResult.rows[0]?.total;
-      totalCount = Number(totalValue ?? 0);
+      const parsedCount = parseQueryTotalCount(totalValue);
+      totalCount = parsedCount ?? 0;
 
       queryToExecute = addPaginationToQuery(query, offset, limit);
       hasMore = offset + limit < totalCount;
