@@ -1,49 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/lib/db';
-import { decrypt } from '@/lib/encryption';
 import { dbConnector } from '@/lib/database-connectors';
+import { parseConnectionAndQueryPayload } from '@/lib/query-request-params';
+import { parseJsonObjectBody } from '@/lib/request-body';
+import { loadDecryptedConnectionById } from '@/lib/server/connections';
 import { getErrorMessage } from '@/lib/utils';
-import type { DbConnectionRow } from '@/types';
 
 type ExecuteQueryPayload = {
-  connectionId?: number;
+  connectionId?: number | string;
   query?: string;
 };
 
 export async function POST(request: NextRequest) {
   try {
-    const body = (await request.json()) as ExecuteQueryPayload;
-    const { connectionId, query } = body;
-
-    if (!connectionId || !query) {
-      return NextResponse.json(
-        { error: 'Connection ID and query are required' },
-        { status: 400 }
-      );
+    const parsedBody = await parseJsonObjectBody<ExecuteQueryPayload>(request);
+    if (parsedBody.error) {
+      return NextResponse.json({ error: parsedBody.error }, { status: parsedBody.status ?? 400 });
+    }
+    const body = parsedBody.value as ExecuteQueryPayload;
+    const parsedRequest = parseConnectionAndQueryPayload(body);
+    if (parsedRequest.error) {
+      return NextResponse.json({ error: parsedRequest.error }, { status: 400 });
     }
 
-    // Get connection details
-    const connectionData = db
-      .prepare('SELECT * FROM connections WHERE id = ?')
-      .get(connectionId) as DbConnectionRow | undefined;
+    const connectionId = parsedRequest.connectionId as number;
+    const query = parsedRequest.query as string;
 
-    if (!connectionData) {
+    const connection = loadDecryptedConnectionById(connectionId);
+    if (!connection) {
       return NextResponse.json({ error: 'Connection not found' }, { status: 404 });
     }
-
-    const password = decrypt(connectionData.encrypted_password);
-
-    const connection = {
-      id: connectionData.id,
-      name: connectionData.name,
-      type: connectionData.type,
-      host: connectionData.host,
-      port: connectionData.port,
-      database: connectionData.database,
-      username: connectionData.username,
-      password,
-      ssl: connectionData.ssl === 1,
-    };
 
     const startTime = Date.now();
 

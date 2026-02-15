@@ -1,62 +1,54 @@
 import { NextRequest, NextResponse } from 'next/server';
-import db from '@/lib/db';
-import { decrypt } from '@/lib/encryption';
 import { dbConnector } from '@/lib/database-connectors';
+import { parsePaginationLimit, parsePaginationOffset } from '@/lib/pagination-params';
+import { parseConnectionAndQueryPayload } from '@/lib/query-request-params';
+import { parseJsonObjectBody } from '@/lib/request-body';
+import { loadDecryptedConnectionById } from '@/lib/server/connections';
 import { getErrorMessage } from '@/lib/utils';
-import type { DbConnectionRow } from '@/types';
 
 type PaginateQueryPayload = {
-  connectionId?: number;
+  connectionId?: number | string;
   query?: string;
-  offset?: number;
-  limit?: number;
+  offset?: number | string;
+  limit?: number | string;
 };
 
 export async function POST(request: NextRequest) {
   try {
-    const body = (await request.json()) as PaginateQueryPayload;
-    const { connectionId, query, offset, limit = 100 } = body;
+    const parsedBody = await parseJsonObjectBody<PaginateQueryPayload>(request);
+    if (parsedBody.error) {
+      return NextResponse.json({ error: parsedBody.error }, { status: parsedBody.status ?? 400 });
+    }
+    const body = parsedBody.value as PaginateQueryPayload;
+    const parsedRequest = parseConnectionAndQueryPayload(body);
+    if (parsedRequest.error) {
+      return NextResponse.json({ error: parsedRequest.error }, { status: 400 });
+    }
+    const { offset, limit } = body;
 
-    if (!connectionId || !query) {
-      return NextResponse.json(
-        { error: 'Connection ID and query are required' },
-        { status: 400 }
-      );
+    const normalizedConnectionId = parsedRequest.connectionId as number;
+    const query = parsedRequest.query as string;
+
+    const parsedOffset = parsePaginationOffset(offset);
+    if (parsedOffset.error) {
+      return NextResponse.json({ error: parsedOffset.error }, { status: 400 });
     }
 
-    if (offset === undefined || offset === null) {
-      return NextResponse.json(
-        { error: 'Offset is required' },
-        { status: 400 }
-      );
+    const parsedLimit = parsePaginationLimit(limit);
+    if (parsedLimit.error) {
+      return NextResponse.json({ error: parsedLimit.error }, { status: 400 });
     }
+    const offsetValue = parsedOffset.value as number;
+    const limitValue = parsedLimit.value as number;
 
-    // Get connection details
-    const connectionData = db
-      .prepare('SELECT * FROM connections WHERE id = ?')
-      .get(connectionId) as DbConnectionRow | undefined;
-
-    if (!connectionData) {
+    const connection = loadDecryptedConnectionById(normalizedConnectionId);
+    if (!connection) {
       return NextResponse.json({ error: 'Connection not found' }, { status: 404 });
     }
 
-    const password = decrypt(connectionData.encrypted_password);
-
-    const connection = {
-      id: connectionData.id,
-      name: connectionData.name,
-      type: connectionData.type,
-      host: connectionData.host,
-      port: connectionData.port,
-      database: connectionData.database,
-      username: connectionData.username,
-      password,
-      ssl: connectionData.ssl === 1,
-    };
-
     try {
       // Execute query with pagination
-      const result = await dbConnector.executeQuery(connection, query, offset, limit);
+      const result = await dbConnector.executeQuery(connection, query, offsetValue, limitValue);
 
       return NextResponse.json({
         success: true,

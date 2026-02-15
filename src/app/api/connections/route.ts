@@ -1,44 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/lib/db';
+import { readConnectionPayload, type ConnectionPayload } from '@/lib/connection-payload';
 import { encrypt } from '@/lib/encryption';
+import { parseOptionalPositivePort } from '@/lib/port-params';
 import { getErrorMessage } from '@/lib/utils';
 import { saveUploadedSqliteFile } from '@/lib/sqlite-files';
-
-type ConnectionPayload = {
-  name?: string;
-  type?: string;
-  host?: string;
-  port?: number;
-  database?: string;
-  username?: string;
-  password?: string;
-  ssl?: boolean;
-  color?: string;
-  sqliteFile?: File | null;
-};
-
-async function readConnectionPayload(request: NextRequest): Promise<ConnectionPayload> {
-  const contentType = request.headers.get('content-type') || '';
-  if (!contentType.includes('multipart/form-data')) {
-    return (await request.json()) as ConnectionPayload;
-  }
-
-  const form = await request.formData();
-  const sqliteFile = form.get('sqliteFile');
-
-  return {
-    name: (form.get('name') as string) || undefined,
-    type: (form.get('type') as string) || undefined,
-    host: (form.get('host') as string) || undefined,
-    port: form.get('port') ? Number(form.get('port')) : undefined,
-    database: (form.get('database') as string) || undefined,
-    username: (form.get('username') as string) || undefined,
-    password: (form.get('password') as string) || undefined,
-    ssl: form.get('ssl') === 'true',
-    color: (form.get('color') as string) || undefined,
-    sqliteFile: sqliteFile instanceof File ? sqliteFile : null,
-  };
-}
 
 export async function GET() {
   try {
@@ -54,9 +20,17 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await readConnectionPayload(request);
+    const parsedPayload = await readConnectionPayload(request);
+    if (parsedPayload.error) {
+      return NextResponse.json({ error: parsedPayload.error }, { status: parsedPayload.status ?? 400 });
+    }
+    const body = (parsedPayload.value ?? {}) as ConnectionPayload;
     const { name, type, host, port, database, username, password, ssl, color, sqliteFile } = body;
     const normalizedType = type || 'postgresql';
+    const parsedPort = parseOptionalPositivePort(port);
+    if (parsedPort.error) {
+      return NextResponse.json({ error: parsedPort.error }, { status: 400 });
+    }
 
     if (!name) {
       return NextResponse.json(
@@ -66,7 +40,7 @@ export async function POST(request: NextRequest) {
     }
 
     let nextHost = host;
-    let nextPort = port;
+    let nextPort = parsedPort.value;
     let nextDatabase = database;
     let nextUsername = username;
     let nextPassword = password;

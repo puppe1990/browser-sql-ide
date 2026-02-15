@@ -1,62 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/lib/db';
+import { readConnectionPayload, type ConnectionPayload } from '@/lib/connection-payload';
 import { encrypt } from '@/lib/encryption';
 import { dbConnector } from '@/lib/database-connectors';
+import { parseOptionalPositivePort } from '@/lib/port-params';
+import { parsePositiveIntRouteParam } from '@/lib/route-params';
+import { loadConnectionRowById, toPublicConnection } from '@/lib/server/connections';
 import { getErrorMessage } from '@/lib/utils';
-import type { DbConnectionRow } from '@/types';
 import { deleteSqliteFileIfManaged, saveUploadedSqliteFile } from '@/lib/sqlite-files';
-
-type ConnectionPayload = {
-  name?: string;
-  type?: string;
-  host?: string;
-  port?: number;
-  database?: string;
-  username?: string;
-  password?: string;
-  ssl?: boolean;
-  color?: string;
-  sqliteFile?: File | null;
-};
-
-async function readConnectionPayload(request: NextRequest): Promise<ConnectionPayload> {
-  const contentType = request.headers.get('content-type') || '';
-  if (!contentType.includes('multipart/form-data')) {
-    return (await request.json()) as ConnectionPayload;
-  }
-
-  const form = await request.formData();
-  const sqliteFile = form.get('sqliteFile');
-
-  return {
-    name: (form.get('name') as string) || undefined,
-    type: (form.get('type') as string) || undefined,
-    host: (form.get('host') as string) || undefined,
-    port: form.get('port') ? Number(form.get('port')) : undefined,
-    database: (form.get('database') as string) || undefined,
-    username: (form.get('username') as string) || undefined,
-    password: (form.get('password') as string) || undefined,
-    ssl: form.get('ssl') === 'true',
-    color: (form.get('color') as string) || undefined,
-    sqliteFile: sqliteFile instanceof File ? sqliteFile : null,
-  };
-}
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const id = parseInt(params.id);
-    const connection = db
-      .prepare('SELECT id, name, type, host, port, database, username, ssl, color, created_at, updated_at FROM connections WHERE id = ?')
-      .get(id);
+    const parsedId = parsePositiveIntRouteParam(params.id, 'Connection ID');
+    if (parsedId.error) {
+      return NextResponse.json({ error: parsedId.error }, { status: 400 });
+    }
+    const id = parsedId.value as number;
+    const connectionRow = loadConnectionRowById(id);
 
-    if (!connection) {
+    if (!connectionRow) {
       return NextResponse.json({ error: 'Connection not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ connection });
+    return NextResponse.json({ connection: toPublicConnection(connectionRow) });
   } catch (error: unknown) {
     return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 });
   }
@@ -67,13 +36,23 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    const id = parseInt(params.id);
-    const body = await readConnectionPayload(request);
+    const parsedId = parsePositiveIntRouteParam(params.id, 'Connection ID');
+    if (parsedId.error) {
+      return NextResponse.json({ error: parsedId.error }, { status: 400 });
+    }
+    const id = parsedId.value as number;
+    const parsedPayload = await readConnectionPayload(request);
+    if (parsedPayload.error) {
+      return NextResponse.json({ error: parsedPayload.error }, { status: parsedPayload.status ?? 400 });
+    }
+    const body = (parsedPayload.value ?? {}) as ConnectionPayload;
     const { name, type, host, port, database, username, password, ssl, color, sqliteFile } = body;
+    const parsedPort = parseOptionalPositivePort(port);
+    if (parsedPort.error) {
+      return NextResponse.json({ error: parsedPort.error }, { status: 400 });
+    }
 
-    const existing = db
-      .prepare('SELECT * FROM connections WHERE id = ?')
-      .get(id) as DbConnectionRow | undefined;
+    const existing = loadConnectionRowById(id);
 
     if (!existing) {
       return NextResponse.json({ error: 'Connection not found' }, { status: 404 });
@@ -82,7 +61,7 @@ export async function PUT(
     const nextType = type ?? existing.type;
     const nextName = name ?? existing.name;
     let nextHost = host ?? existing.host;
-    let nextPort = port ?? existing.port;
+    let nextPort = parsedPort.value ?? existing.port;
     let nextDatabase = database ?? existing.database;
     let nextUsername = username ?? existing.username;
     let nextPassword = password;
@@ -150,11 +129,13 @@ export async function PUT(
     // Ensure a fresh pool is created with updated credentials on next use.
     await dbConnector.disconnect(id);
 
-    const connection = db
-      .prepare('SELECT id, name, type, host, port, database, username, ssl, color, created_at, updated_at FROM connections WHERE id = ?')
-      .get(id);
+    const updatedConnectionRow = loadConnectionRowById(id);
 
-    return NextResponse.json({ connection });
+    if (!updatedConnectionRow) {
+      return NextResponse.json({ error: 'Connection not found' }, { status: 404 });
+    }
+
+    return NextResponse.json({ connection: toPublicConnection(updatedConnectionRow) });
   } catch (error: unknown) {
     return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 });
   }
@@ -165,10 +146,12 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const id = parseInt(params.id);
-    const connection = db
-      .prepare('SELECT * FROM connections WHERE id = ?')
-      .get(id) as DbConnectionRow | undefined;
+    const parsedId = parsePositiveIntRouteParam(params.id, 'Connection ID');
+    if (parsedId.error) {
+      return NextResponse.json({ error: parsedId.error }, { status: 400 });
+    }
+    const id = parsedId.value as number;
+    const connection = loadConnectionRowById(id);
 
     if (!connection) {
       return NextResponse.json({ error: 'Connection not found' }, { status: 404 });

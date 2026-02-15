@@ -1,27 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/lib/db';
+import { parseJsonObjectBody } from '@/lib/request-body';
+import { parseOptionalPositiveIntParam } from '@/lib/route-params';
+import { parseSavedQueryCreatePayload } from '@/lib/saved-query-payload';
 import { getErrorMessage } from '@/lib/utils';
-
-type SavedQueryPayload = {
-  connectionId?: number | null;
-  name?: string;
-  query?: string;
-  description?: string | null;
-  folder?: string | null;
-};
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const connectionId = searchParams.get('connectionId');
+    const parsedConnectionId = parseOptionalPositiveIntParam(connectionId, 'Connection ID');
+    if (parsedConnectionId.error) {
+      return NextResponse.json({ error: parsedConnectionId.error }, { status: 400 });
+    }
 
     let queries;
-    if (connectionId) {
+    if (parsedConnectionId.value !== undefined) {
       queries = db
         .prepare(
           'SELECT * FROM saved_queries WHERE connection_id = ? ORDER BY created_at DESC'
         )
-        .all(parseInt(connectionId));
+        .all(parsedConnectionId.value);
     } else {
       queries = db
         .prepare('SELECT * FROM saved_queries ORDER BY created_at DESC')
@@ -36,21 +35,22 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = (await request.json()) as SavedQueryPayload;
-    const { connectionId, name, query, description, folder } = body;
-
-    if (!name || !query) {
-      return NextResponse.json(
-        { error: 'Name and query are required' },
-        { status: 400 }
-      );
+    const parsedBody = await parseJsonObjectBody<Record<string, unknown>>(request);
+    if (parsedBody.error) {
+      return NextResponse.json({ error: parsedBody.error }, { status: parsedBody.status ?? 400 });
     }
+
+    const parsedPayload = parseSavedQueryCreatePayload(parsedBody.value as Record<string, unknown>);
+    if (parsedPayload.error !== undefined) {
+      return NextResponse.json({ error: parsedPayload.error }, { status: 400 });
+    }
+    const { connectionId, name, query, description, folder } = parsedPayload;
 
     const result = db
       .prepare(
         'INSERT INTO saved_queries (connection_id, name, query, description, folder) VALUES (?, ?, ?, ?, ?)'
       )
-      .run(connectionId || null, name, query, description || null, folder || null);
+      .run(connectionId ?? null, name, query, description ?? null, folder ?? null);
 
     const savedQuery = db
       .prepare('SELECT * FROM saved_queries WHERE id = ?')

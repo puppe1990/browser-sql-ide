@@ -1,55 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
-import db from '@/lib/db';
-import { decrypt } from '@/lib/encryption';
 import { dbConnector } from '@/lib/database-connectors';
+import { parseMetadataCategoryParam, parseRequiredStringParam } from '@/lib/metadata-params';
+import { parsePositiveIntRouteParam } from '@/lib/route-params';
+import { hydrateConnectionRow, loadConnectionRowById } from '@/lib/server/connections';
 import { getErrorMessage } from '@/lib/utils';
-import type { DbConnectionRow } from '@/types';
-
-type MetadataCategory =
-  | 'databases'
-  | 'schemas'
-  | 'schema_objects'
-  | 'event_triggers'
-  | 'extensions'
-  | 'storage'
-  | 'system_info'
-  | 'roles';
-
-function normalizeCategory(value: string | null): MetadataCategory | null {
-  if (!value) return null;
-  switch (value) {
-    case 'databases':
-    case 'schemas':
-    case 'schema_objects':
-    case 'event_triggers':
-    case 'extensions':
-    case 'storage':
-    case 'system_info':
-    case 'roles':
-      return value;
-    default:
-      return null;
-  }
-}
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const id = parseInt(params.id, 10);
-    if (!Number.isFinite(id)) {
-      return NextResponse.json({ error: 'Invalid connection id' }, { status: 400 });
+    const parsedId = parsePositiveIntRouteParam(params.id, 'Connection ID');
+    if (parsedId.error) {
+      return NextResponse.json({ error: parsedId.error }, { status: 400 });
     }
+    const id = parsedId.value as number;
 
-    const category = normalizeCategory(request.nextUrl.searchParams.get('category'));
-    if (!category) {
-      return NextResponse.json({ error: 'Missing or invalid category' }, { status: 400 });
+    const parsedCategory = parseMetadataCategoryParam(request.nextUrl.searchParams.get('category'));
+    if (parsedCategory.error) {
+      return NextResponse.json({ error: parsedCategory.error }, { status: 400 });
     }
+    const category = parsedCategory.value;
 
-    const connectionRow = db
-      .prepare('SELECT * FROM connections WHERE id = ?')
-      .get(id) as DbConnectionRow | undefined;
+    const connectionRow = loadConnectionRowById(id);
 
     if (!connectionRow) {
       return NextResponse.json({ error: 'Connection not found' }, { status: 404 });
@@ -62,17 +35,7 @@ export async function GET(
       );
     }
 
-    const connection = {
-      id: connectionRow.id,
-      name: connectionRow.name,
-      type: connectionRow.type,
-      host: connectionRow.host,
-      port: connectionRow.port,
-      database: connectionRow.database,
-      username: connectionRow.username,
-      password: decrypt(connectionRow.encrypted_password),
-      ssl: Boolean(connectionRow.ssl),
-    };
+    const connection = hydrateConnectionRow(connectionRow);
 
     const pool = await dbConnector.connect(connection);
 
@@ -90,10 +53,11 @@ export async function GET(
         return NextResponse.json({ items: result.rows.map((row) => row.schema_name) });
       }
       case 'schema_objects': {
-        const schema = request.nextUrl.searchParams.get('schema');
-        if (!schema) {
-          return NextResponse.json({ error: 'Missing schema parameter' }, { status: 400 });
+        const parsedSchema = parseRequiredStringParam(request.nextUrl.searchParams.get('schema'), 'schema');
+        if (parsedSchema.error) {
+          return NextResponse.json({ error: parsedSchema.error }, { status: 400 });
         }
+        const schema = parsedSchema.value;
         const result = await pool.query(
           `SELECT table_name, table_type
            FROM information_schema.tables

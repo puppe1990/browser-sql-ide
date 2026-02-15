@@ -1,12 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/lib/db';
+import { parsePositiveIntRouteParam } from '@/lib/route-params';
+import { parseJsonObjectBody } from '@/lib/request-body';
+import { parseSavedQueryUpdatePayload } from '@/lib/saved-query-payload';
 import { getErrorMessage } from '@/lib/utils';
 
-type SavedQueryPayload = {
-  name?: string;
-  query?: string;
-  description?: string | null;
-  folder?: string | null;
+type SavedQueryRow = {
+  id: number;
+  connection_id: number | null;
+  name: string;
+  query: string;
+  description: string | null;
+  folder: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export async function GET(
@@ -14,8 +21,14 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const id = parseInt(params.id);
-    const query = db.prepare('SELECT * FROM saved_queries WHERE id = ?').get(id);
+    const parsedId = parsePositiveIntRouteParam(params.id, 'Query ID');
+    if (parsedId.error) {
+      return NextResponse.json({ error: parsedId.error }, { status: 400 });
+    }
+    const id = parsedId.value as number;
+    const query = db
+      .prepare('SELECT * FROM saved_queries WHERE id = ?')
+      .get(id) as SavedQueryRow | undefined;
 
     if (!query) {
       return NextResponse.json({ error: 'Query not found' }, { status: 404 });
@@ -32,13 +45,25 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    const id = parseInt(params.id);
-    const body = (await request.json()) as SavedQueryPayload;
-    const { name, query, description, folder } = body;
+    const parsedId = parsePositiveIntRouteParam(params.id, 'Query ID');
+    if (parsedId.error) {
+      return NextResponse.json({ error: parsedId.error }, { status: 400 });
+    }
+    const id = parsedId.value as number;
+    const parsedBody = await parseJsonObjectBody<Record<string, unknown>>(request);
+    if (parsedBody.error) {
+      return NextResponse.json({ error: parsedBody.error }, { status: parsedBody.status ?? 400 });
+    }
+    const body = parsedBody.value as Record<string, unknown>;
+    const parsedPayload = parseSavedQueryUpdatePayload(body);
+    if (parsedPayload.error !== undefined) {
+      return NextResponse.json({ error: parsedPayload.error }, { status: 400 });
+    }
+    const { name, query, description, folder } = parsedPayload;
 
     const existing = db
       .prepare('SELECT * FROM saved_queries WHERE id = ?')
-      .get(id);
+      .get(id) as SavedQueryRow | undefined;
 
     if (!existing) {
       return NextResponse.json({ error: 'Query not found' }, { status: 404 });
@@ -55,7 +80,7 @@ export async function PUT(
 
     const updatedQuery = db
       .prepare('SELECT * FROM saved_queries WHERE id = ?')
-      .get(id);
+      .get(id) as SavedQueryRow | undefined;
 
     return NextResponse.json({ query: updatedQuery });
   } catch (error: unknown) {
@@ -68,7 +93,11 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const id = parseInt(params.id);
+    const parsedId = parsePositiveIntRouteParam(params.id, 'Query ID');
+    if (parsedId.error) {
+      return NextResponse.json({ error: parsedId.error }, { status: 400 });
+    }
+    const id = parsedId.value as number;
     const result = db.prepare('DELETE FROM saved_queries WHERE id = ?').run(id);
 
     if (result.changes === 0) {
