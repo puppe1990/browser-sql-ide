@@ -26,8 +26,6 @@ export default function CompareFieldsModal({
   onDone,
   onClose,
 }: CompareFieldsModalProps) {
-  if (!open) return null;
-
   const selectableColumns = commonColumns.filter((col) => !compareKeys.includes(col));
   const [searchValue, setSearchValue] = useState('');
   useEffect(() => {
@@ -40,6 +38,8 @@ export default function CompareFieldsModal({
     const normalized = searchValue.trim().toLowerCase();
     return selectableColumns.filter((col) => col.toLowerCase().includes(normalized));
   }, [searchValue, selectableColumns]);
+
+  if (!open) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">

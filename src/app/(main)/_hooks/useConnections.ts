@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { Connection } from '../types';
+import { buildConnectionNameMap, fetchConnections } from '@/lib/client-connections';
 
 export function useConnections() {
   const [connectionsById, setConnectionsById] = useState<Record<number, string>>({});
@@ -7,14 +7,8 @@ export function useConnections() {
   useEffect(() => {
     const loadConnections = async () => {
       try {
-        const response = await fetch('/api/connections');
-        const data = await response.json();
-        const loadedConnections = data.connections || [];
-        const map: Record<number, string> = {};
-        loadedConnections.forEach((connection: Connection) => {
-          map[connection.id] = connection.name;
-        });
-        setConnectionsById(map);
+        const loadedConnections = await fetchConnections();
+        setConnectionsById(buildConnectionNameMap(loadedConnections));
       } catch (error) {
         console.error('Failed to load connections:', error);
       }

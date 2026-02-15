@@ -1,4 +1,5 @@
 import type { RowData } from '@/types';
+import { parseComparableNumber } from '../../../lib/compare-number.ts';
 
 export function exportToCsv(columns: string[], rows: RowData[]) {
   if (!rows.length) return;
@@ -194,4 +195,45 @@ export function parseInsertStatements(sqlContent: string): string[] {
     .filter((stmt) => stmt.length > 0 && stmt.toUpperCase().startsWith('INSERT'));
   
   return statements;
+}
+
+export function coerceEditedCellValue(rawValue: unknown, originalValue: unknown): unknown {
+  if (rawValue === null) return null;
+  if (typeof rawValue !== 'string') return rawValue;
+  if (originalValue === null || originalValue === undefined) return rawValue;
+
+  if (typeof originalValue === 'number') {
+    const parsed = parseComparableNumber(rawValue);
+    return parsed === null ? rawValue : parsed;
+  }
+
+  if (typeof originalValue === 'boolean') {
+    if (rawValue.toLowerCase() === 'true') return true;
+    if (rawValue.toLowerCase() === 'false') return false;
+    return rawValue;
+  }
+
+  if (typeof originalValue === 'object') {
+    try {
+      return JSON.parse(rawValue);
+    } catch {
+      return rawValue;
+    }
+  }
+
+  return rawValue;
+}
+
+export function parseEditedRowIndexKey(rowIndexKey: string): number | null {
+  const trimmed = rowIndexKey.trim();
+  if (!/^[0-9]+$/.test(trimmed)) {
+    return null;
+  }
+
+  const parsed = Number(trimmed);
+  if (!Number.isSafeInteger(parsed) || parsed < 0) {
+    return null;
+  }
+
+  return parsed;
 }

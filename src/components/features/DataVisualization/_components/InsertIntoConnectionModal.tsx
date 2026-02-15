@@ -3,6 +3,7 @@
 import { Loader2, X } from 'lucide-react';
 import type { FormEvent } from 'react';
 import type { Connection } from '@/components/features/QueryEditor/types';
+import { parseStrictPositiveInt } from '@/lib/strict-positive-int';
 
 type InsertIntoConnectionModalProps = {
   open: boolean;
@@ -65,7 +66,12 @@ export default function InsertIntoConnectionModal({
             {hasConnections ? (
               <select
                 value={selectedConnectionId ?? ''}
-                onChange={(event) => onConnectionChange(parseInt(event.target.value, 10))}
+                onChange={(event) => {
+                  const parsedConnectionId = parseStrictPositiveInt(event.target.value);
+                  if (parsedConnectionId !== undefined) {
+                    onConnectionChange(parsedConnectionId);
+                  }
+                }}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                 required
               >

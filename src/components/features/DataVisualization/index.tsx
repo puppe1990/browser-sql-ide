@@ -17,6 +17,8 @@ import {
   getEmptyResultFeedback,
   getRowCountText,
   parseInsertStatements,
+  coerceEditedCellValue,
+  parseEditedRowIndexKey,
 } from './utils';
 import { useConnections } from '@/components/features/QueryEditor/helpers';
 import Tooltip from '@/components/ui/Tooltip';
@@ -193,33 +195,6 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
     return [...baseRows, ...newRows];
   }, [allRows, addedRows, editedCells]);
 
-  const parseInputValue = useCallback((rawValue: unknown, originalValue: unknown) => {
-    if (rawValue === null) return null;
-    if (typeof rawValue !== 'string') return rawValue;
-    if (originalValue === null || originalValue === undefined) return rawValue;
-
-    if (typeof originalValue === 'number') {
-      const parsed = Number(rawValue);
-      return Number.isNaN(parsed) ? rawValue : parsed;
-    }
-
-    if (typeof originalValue === 'boolean') {
-      if (rawValue.toLowerCase() === 'true') return true;
-      if (rawValue.toLowerCase() === 'false') return false;
-      return rawValue;
-    }
-
-    if (typeof originalValue === 'object') {
-      try {
-        return JSON.parse(rawValue);
-      } catch {
-        return rawValue;
-      }
-    }
-
-    return rawValue;
-  }, []);
-
   const handleSelectCell = useCallback((cell: SelectedCell) => {
     setSelectedCell(cell);
     if (cell.isNew) {
@@ -247,7 +222,7 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
       }
 
       const originalRow = originalRowsRef.current[cell.rowIndex] ?? {};
-      const parsedValue = parseInputValue(rawValue, originalRow[cell.column]);
+      const parsedValue = coerceEditedCellValue(rawValue, originalRow[cell.column]);
       const originalValue = originalRow[cell.column];
       const valuesEqual =
         typeof originalValue === 'object' && typeof parsedValue === 'object'
@@ -271,7 +246,7 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
         return { ...prev, [cell.rowIndex]: existing };
       });
     },
-    [parseInputValue]
+    []
   );
 
   const handleAddRow = useCallback(() => {
@@ -367,7 +342,8 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
     });
 
     Object.entries(editedCells).forEach(([rowIndexKey, changes]) => {
-      const rowIndex = Number(rowIndexKey);
+      const rowIndex = parseEditedRowIndexKey(rowIndexKey);
+      if (rowIndex === null) return;
       if (deletedRowIndices.includes(rowIndex)) return;
       const originalRow = originalRowsRef.current[rowIndex];
       if (!originalRow) return;
@@ -396,7 +372,8 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
     (baseRows: RowData[]) => {
       let nextRows = [...baseRows];
       Object.entries(editedCells).forEach(([rowIndexKey, changes]) => {
-        const rowIndex = Number(rowIndexKey);
+        const rowIndex = parseEditedRowIndexKey(rowIndexKey);
+        if (rowIndex === null) return;
         if (deletedRowIndices.includes(rowIndex)) return;
         if (!nextRows[rowIndex]) return;
         nextRows[rowIndex] = { ...nextRows[rowIndex], ...changes };

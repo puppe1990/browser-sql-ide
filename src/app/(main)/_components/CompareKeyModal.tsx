@@ -20,8 +20,6 @@ export default function CompareKeyModal({
   onCancel,
   onConfirm,
 }: CompareKeyModalProps) {
-  if (!open) return null;
-
   const [searchValue, setSearchValue] = useState('');
   useEffect(() => {
     if (open) {
@@ -34,6 +32,8 @@ export default function CompareKeyModal({
     const normalized = searchValue.trim().toLowerCase();
     return commonColumns.filter((col) => col.toLowerCase().includes(normalized));
   }, [commonColumns, searchValue]);
+
+  if (!open) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">

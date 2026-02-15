@@ -1,5 +1,6 @@
 import type * as Monaco from 'monaco-editor';
 import { findStatementAtCursor } from '@/lib/query-utils';
+import { parseErrorLineNumber } from '@/lib/error-line-number';
 
 export function getQueryFromEditor(
   editor: Monaco.editor.IStandaloneCodeEditor | null,
@@ -27,12 +28,9 @@ export function getQueryFromEditor(
 }
 
 export function findErrorLine(errorMessage: string, queryText: string): number | null {
-  const lineNumberMatch = errorMessage.match(/line\s+(\d+)|position\s+(\d+)|at\s+line\s+(\d+)/i);
-  if (lineNumberMatch) {
-    const lineNum = parseInt(lineNumberMatch[1] || lineNumberMatch[2] || lineNumberMatch[3], 10);
-    if (lineNum > 0) {
-      return lineNum;
-    }
+  const explicitLineNumber = parseErrorLineNumber(errorMessage);
+  if (explicitLineNumber !== null) {
+    return explicitLineNumber;
   }
 
   const lines = queryText.split('\n');

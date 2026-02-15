@@ -2,6 +2,7 @@
 
 import { TestTube, X } from 'lucide-react';
 import type { FormEvent } from 'react';
+import { parsePortInputValue } from '@/lib/port-input';
 import type { Connection, ConnectionFormData, TestResult } from '../types';
 
 type ConnectionFormModalProps = {
@@ -145,7 +146,12 @@ export default function ConnectionFormModal({
                     type="number"
                     required
                     value={formData.port}
-                    onChange={(e) => onChange({ ...formData, port: parseInt(e.target.value, 10) })}
+                    onChange={(e) =>
+                      onChange({
+                        ...formData,
+                        port: parsePortInputValue(e.target.value, formData.port),
+                      })
+                    }
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   />
                 </div>

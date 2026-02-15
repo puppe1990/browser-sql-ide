@@ -1,4 +1,5 @@
 import type { ComparisonResult } from '@/types';
+import { parseComparableNumber } from '@/lib/compare-number';
 import type { QueryResultWithMeta } from '../types';
 
 type ExportCompareParams = {
@@ -16,21 +17,6 @@ export function exportComparedResultsToCsv({
   queryResult,
   queryResult2,
 }: ExportCompareParams) {
-  const parseNumericValue = (value: unknown) => {
-    if (typeof value === 'number' && Number.isFinite(value)) {
-      return value;
-    }
-
-    if (typeof value === 'string') {
-      const trimmed = value.trim();
-      if (!trimmed) return null;
-      const parsed = Number(trimmed);
-      return Number.isFinite(parsed) ? parsed : null;
-    }
-
-    return null;
-  };
-
   const headers = [
     ...(compareKeys.length > 0 ? compareKeys.map((key) => `Key: ${key}`) : ['Key Value']),
     'Status',
@@ -70,8 +56,8 @@ export function exportComparedResultsToCsv({
           const leftValue = comparison.left ?? 'NULL';
           const rightValue = comparison.right ?? 'NULL';
           const match = comparison.match ? 'Yes' : 'No';
-          const leftNumber = parseNumericValue(leftValue);
-          const rightNumber = parseNumericValue(rightValue);
+          const leftNumber = parseComparableNumber(leftValue);
+          const rightNumber = parseComparableNumber(rightValue);
           const diff = leftNumber !== null && rightNumber !== null ? String(leftNumber - rightNumber) : 'N/A';
           row.push(
             String(leftValue).replace(/"/g, '""'),
@@ -92,8 +78,8 @@ export function exportComparedResultsToCsv({
       allColumns.forEach((col) => {
         const leftValue = item.leftRows[0]?.[col] ?? 'NULL';
         const rightValue = item.rightRows[0]?.[col] ?? 'NULL';
-        const leftNumber = parseNumericValue(leftValue);
-        const rightNumber = parseNumericValue(rightValue);
+        const leftNumber = parseComparableNumber(leftValue);
+        const rightNumber = parseComparableNumber(rightValue);
         const diff = leftNumber !== null && rightNumber !== null ? String(leftNumber - rightNumber) : 'N/A';
         row.push(
           String(leftValue).replace(/"/g, '""'),

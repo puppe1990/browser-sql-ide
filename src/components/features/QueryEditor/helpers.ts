@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import type { ChangeEvent, MutableRefObject } from 'react';
 import type * as Monaco from 'monaco-editor';
 import { processQuery } from '@/lib/query-utils';
+import { parseStrictPositiveInt } from '@/lib/strict-positive-int';
+import { fetchConnections, resolveSelectedConnectionId } from '@/lib/client-connections';
 import type { QueryResult } from '@/types';
 import type { Connection } from './types';
 
@@ -34,22 +36,16 @@ export function useConnections({ connectionId, onConnectionChange }: UseConnecti
 
   const refreshConnections = useCallback(async () => {
     try {
-      const response = await fetch('/api/connections');
-      const data = await response.json();
-      const loadedConnections = data.connections || [];
+      const loadedConnections = (await fetchConnections()) as Connection[];
       setConnections(loadedConnections);
 
-      if (loadedConnections.length === 0) {
+      const nextConnectionId = resolveSelectedConnectionId(selectedConnectionId, loadedConnections);
+      if (nextConnectionId === undefined) {
         if (selectedConnectionId !== undefined) {
           setSelectedConnectionId(undefined);
         }
         return;
       }
-
-      const hasSelected =
-        selectedConnectionId !== undefined &&
-        loadedConnections.some((conn: Connection) => conn.id === selectedConnectionId);
-      const nextConnectionId = hasSelected ? selectedConnectionId : loadedConnections[0].id;
 
       if (nextConnectionId !== selectedConnectionId) {
         setSelectedConnectionId(nextConnectionId);
@@ -85,7 +81,10 @@ export function useConnections({ connectionId, onConnectionChange }: UseConnecti
 
   const handleConnectionChange = useCallback(
     (e: ChangeEvent<HTMLSelectElement>) => {
-      const newConnectionId = parseInt(e.target.value, 10);
+      const newConnectionId = parseStrictPositiveInt(e.target.value);
+      if (newConnectionId === undefined) {
+        return;
+      }
       setSelectedConnectionId(newConnectionId);
       if (onConnectionChange) {
         onConnectionChange(newConnectionId);

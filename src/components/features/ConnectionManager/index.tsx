@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from 'react';
 import type { ChangeEvent, FormEvent } from 'react';
 import { Download, Plus, Upload } from 'lucide-react';
 import ConfirmModal from '@/components/ui/ConfirmModal';
+import { fetchConnections } from '@/lib/client-connections';
+import { parseStrictPositiveInt } from '@/lib/strict-positive-int';
 import { getErrorMessage } from '@/lib/utils';
 import ConnectionFormModal from './_components/ConnectionFormModal';
 import ConnectionList from './_components/ConnectionList';
@@ -49,9 +51,7 @@ export default function ConnectionManager({
 
   const loadConnections = useCallback(async () => {
     try {
-      const response = await fetch('/api/connections');
-      const data = await response.json();
-      const loadedConnections = data.connections || [];
+      const loadedConnections = (await fetchConnections()) as Connection[];
       setConnections(loadedConnections);
       if (defaultConnectionId !== null) {
         const exists = loadedConnections.some((conn: Connection) => conn.id === defaultConnectionId);
@@ -74,8 +74,8 @@ export default function ConnectionManager({
     if (typeof window === 'undefined') return;
     const storedDefaultId = localStorage.getItem(DEFAULT_CONNECTION_KEY);
     if (storedDefaultId) {
-      const parsed = parseInt(storedDefaultId, 10);
-      setDefaultConnectionId(Number.isFinite(parsed) ? parsed : null);
+      const parsed = parseStrictPositiveInt(storedDefaultId);
+      setDefaultConnectionId(parsed ?? null);
     }
   }, []);
 

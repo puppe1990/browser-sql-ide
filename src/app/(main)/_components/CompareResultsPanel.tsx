@@ -2,22 +2,8 @@
 
 import { useMemo, useState } from 'react';
 import { Download, Loader2, RefreshCw, X } from 'lucide-react';
+import { parseComparableNumber } from '@/lib/compare-number';
 import type { ComparisonResult } from '@/types';
-
-const parseNumericValue = (value: unknown) => {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value;
-  }
-
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    if (!trimmed) return null;
-    const parsed = Number(trimmed);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-
-  return null;
-};
 
 type CompareResultsPanelProps = {
   height: number;
@@ -210,8 +196,8 @@ export default function CompareResultsPanel({
                       );
                     }
                     const isMatch = comparison.match;
-                    const leftNumber = parseNumericValue(comparison.left);
-                    const rightNumber = parseNumericValue(comparison.right);
+                    const leftNumber = parseComparableNumber(comparison.left);
+                    const rightNumber = parseComparableNumber(comparison.right);
                     const diff = leftNumber !== null && rightNumber !== null ? leftNumber - rightNumber : null;
                     return (
                       <td key={field} className="px-3 py-2 text-xs">

@@ -8,6 +8,36 @@ import type { ActiveTabPayload, Tab } from './types';
 import { getDefaultConnectionId, getStorageKeys } from './utils';
 import { useConnections } from '@/components/features/QueryEditor/helpers';
 
+function createTabId() {
+  return `tab-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+}
+
+function resolvePreferredConnectionId(
+  defaultConnectionId?: number,
+  connectionId?: number
+): number | undefined {
+  return defaultConnectionId ?? getDefaultConnectionId() ?? connectionId;
+}
+
+function createTab({
+  id = createTabId(),
+  name,
+  query = '',
+  connectionId,
+}: {
+  id?: string;
+  name: string;
+  query?: string;
+  connectionId?: number;
+}): Tab {
+  return {
+    id,
+    name,
+    query,
+    ...(connectionId === undefined ? {} : { connectionId }),
+  };
+}
+
 interface TabbedQueryEditorProps {
   connectionId?: number;
   onQuerySave?: (query: string) => void;
@@ -48,13 +78,11 @@ export default function TabbedQueryEditor({
   }, [connections]);
 
   const createNewTab = useCallback(() => {
-    const preferredConnectionId = defaultConnectionId ?? getDefaultConnectionId() ?? connectionId;
-    const newTab: Tab = {
-      id: `tab-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      name: `Query 1`,
-      query: '',
+    const preferredConnectionId = resolvePreferredConnectionId(defaultConnectionId, connectionId);
+    const newTab = createTab({
+      name: 'Query 1',
       connectionId: preferredConnectionId,
-    };
+    });
     
     setTabs((prev) => {
       const tabName = `Query ${prev.length + 1}`;
@@ -130,11 +158,7 @@ export default function TabbedQueryEditor({
           setActiveTabId(newTabs[newActiveIndex].id);
         } else {
           // If no tabs left, create a new one
-          const newTab: Tab = {
-            id: `tab-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            name: 'Query 1',
-            query: '',
-          };
+          const newTab = createTab({ name: 'Query 1' });
           setActiveTabId(newTab.id);
           return [newTab];
         }
@@ -168,19 +192,16 @@ export default function TabbedQueryEditor({
     const sourceIndex = tabs.findIndex((tab) => tab.id === tabId);
     if (sourceIndex === -1) return;
     const sourceTab = tabs[sourceIndex];
-    const newTabId = `tab-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
-    const newTab: Tab = {
-      id: newTabId,
+    const newTab = createTab({
       name: `${sourceTab.name} copy`,
       query: sourceTab.query,
       connectionId: sourceTab.connectionId,
-    };
+    });
 
     const nextTabs = [...tabs];
     nextTabs.splice(sourceIndex + 1, 0, newTab);
     setTabs(nextTabs);
-    setActiveTabId(newTabId);
+    setActiveTabId(newTab.id);
   }, [tabs]);
 
   const reorderTabs = useCallback((dragId: string, targetId: string) => {
@@ -239,12 +260,7 @@ export default function TabbedQueryEditor({
       });
     }
   }, [
-    activeTab?.id,
-    activeTab?.query,
-    activeTab?.connectionId,
-    activeTab?.result,
-    activeTab?.error,
-    activeTab?.lastExecutedQuery,
+    activeTab,
     onActiveQueryChange,
     onActiveTabChange,
   ]);
@@ -278,14 +294,13 @@ export default function TabbedQueryEditor({
 
   // Method to add a query from outside (e.g., SavedQueries)
   const addQueryToNewTab = useCallback((query: string) => {
-    const preferredConnectionId = defaultConnectionId ?? getDefaultConnectionId() ?? connectionId;
+    const preferredConnectionId = resolvePreferredConnectionId(defaultConnectionId, connectionId);
     setTabs((prev) => {
-      const newTab: Tab = {
-        id: `tab-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      const newTab = createTab({
         name: `Query ${prev.length + 1}`,
         query,
         connectionId: preferredConnectionId,
-      };
+      });
       setActiveTabId(newTab.id);
       return [...prev, newTab];
     });

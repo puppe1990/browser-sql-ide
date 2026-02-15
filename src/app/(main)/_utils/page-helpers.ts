@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { processQuery } from '@/lib/query-utils';
+import { parseComparableNumber } from '../../../lib/compare-number.ts';
+import { processQuery } from '../../../lib/query-utils.ts';
 import type { Connection, QueryResultWithMeta } from '../types';
 
 export const STORAGE_KEYS = {
@@ -26,8 +27,8 @@ export const parseBoolean = (raw: string): boolean | undefined => {
 };
 
 export const parseNumberInRange = (raw: string, options: NumberRangeOptions = {}): number | undefined => {
-  const value = Number(raw);
-  if (!Number.isFinite(value)) return undefined;
+  const value = parseComparableNumber(raw);
+  if (value === null) return undefined;
 
   const { minExclusive, maxExclusive, minInclusive, maxInclusive } = options;
 
