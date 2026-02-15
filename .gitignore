@@ -41,3 +41,23 @@ data/
 *.swp
 *.swo
 *~
+
+# Ralph runtime artifacts
+.ralph/
+.ralphrc
+.ralph/logs/
+.ralph/live.log
+.ralph/status.json
+.ralph/progress.json
+.ralph/.call_count
+.ralph/.last_reset
+.ralph/.exit_signals
+.ralph/.response_analysis
+.ralph/.json_parse_result
+.ralph/.loop_start_sha
+.ralph/.last_output_length
+.ralph/.circuit_breaker_state
+.ralph/.circuit_breaker_history
+.ralph/.codex_session_id
+.ralph/.ralph_session
+.ralph/.ralph_session_history
