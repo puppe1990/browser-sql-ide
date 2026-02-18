@@ -6,10 +6,11 @@ import { getErrorMessage } from '@/lib/utils';
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const parsedId = parsePositiveIntRouteParam(params.id, 'Connection ID');
+    const { id: routeId } = await context.params;
+    const parsedId = parsePositiveIntRouteParam(routeId, 'Connection ID');
     if (parsedId.error) {
       return NextResponse.json({ error: parsedId.error }, { status: 400 });
     }

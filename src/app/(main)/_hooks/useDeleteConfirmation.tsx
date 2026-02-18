@@ -27,7 +27,7 @@ export function useDeleteConfirmation() {
 
   const requestDeleteConfirmation = (
     queries: string[],
-    onConfirm: () => void,
+    onConfirm: () => void | Promise<void>,
     connectionNames: string[] = [],
   ) => {
     const deleteInfo = getDeleteConfirmationInfo(queries.join(';\n'));

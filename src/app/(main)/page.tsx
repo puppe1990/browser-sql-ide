@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import ConfirmModal from '@/components/ui/ConfirmModal';
+import { getErrorMessage } from '@/lib/utils';
 import Sidebar from './_components/Sidebar';
 import type { Connection } from './types';
 import MainContent from './_components/MainContent';
@@ -221,11 +222,15 @@ export default function Home() {
           confirmLabel={deleteConfirm.confirmLabel}
           confirmTone={deleteConfirm.confirmTone}
           onCancel={closeDeleteConfirm}
-          onConfirm={() => {
+          onConfirm={async () => {
             const action = deleteConfirm.onConfirm;
             closeDeleteConfirm();
             if (action) {
-              action();
+              try {
+                await action();
+              } catch (error: unknown) {
+                alert(getErrorMessage(error) || 'Failed to complete action');
+              }
             }
           }}
         />

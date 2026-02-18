@@ -1,8 +1,10 @@
 import path from 'path';
 import fs from 'fs';
+import { createRequire } from 'node:module';
 
 type BetterSqliteDatabase = import('better-sqlite3').Database;
 type BetterSqliteModule = typeof import('better-sqlite3');
+const require = createRequire(import.meta.url);
 
 const dbPath = path.join(process.cwd(), 'data', 'ide.db');
 const dbDir = path.dirname(dbPath);
@@ -16,8 +18,7 @@ function ensureDataDirectory() {
 }
 
 function loadBetterSqlite3(): BetterSqliteModule {
-  const dynamicRequire = new Function('return require')() as NodeRequire;
-  return dynamicRequire('better-sqlite3') as BetterSqliteModule;
+  return require('better-sqlite3') as BetterSqliteModule;
 }
 
 export function formatDatabaseInitError(cause: unknown): string {

@@ -11,10 +11,11 @@ import { deleteSqliteFileIfManaged, saveUploadedSqliteFile } from '@/lib/sqlite-
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const parsedId = parsePositiveIntRouteParam(params.id, 'Connection ID');
+    const { id: routeId } = await context.params;
+    const parsedId = parsePositiveIntRouteParam(routeId, 'Connection ID');
     if (parsedId.error) {
       return NextResponse.json({ error: parsedId.error }, { status: 400 });
     }
@@ -33,10 +34,11 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const parsedId = parsePositiveIntRouteParam(params.id, 'Connection ID');
+    const { id: routeId } = await context.params;
+    const parsedId = parsePositiveIntRouteParam(routeId, 'Connection ID');
     if (parsedId.error) {
       return NextResponse.json({ error: parsedId.error }, { status: 400 });
     }
@@ -143,10 +145,11 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const parsedId = parsePositiveIntRouteParam(params.id, 'Connection ID');
+    const { id: routeId } = await context.params;
+    const parsedId = parsePositiveIntRouteParam(routeId, 'Connection ID');
     if (parsedId.error) {
       return NextResponse.json({ error: parsedId.error }, { status: 400 });
     }
