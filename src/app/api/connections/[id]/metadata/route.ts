@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { dbConnector } from '@/lib/database-connectors';
 import { parseMetadataCategoryParam, parseRequiredStringParam } from '@/lib/metadata-params';
 import { parsePositiveIntRouteParam } from '@/lib/route-params';
-import { hydrateConnectionRow, loadConnectionRowById } from '@/lib/server/connections';
+import { hydrateConnectionRow, loadConnectionRowByIdAsync } from '@/lib/server/connections';
 import { getErrorMessage } from '@/lib/utils';
 
 export async function GET(
@@ -23,7 +23,7 @@ export async function GET(
     }
     const category = parsedCategory.value;
 
-    const connectionRow = loadConnectionRowById(id);
+    const connectionRow = await loadConnectionRowByIdAsync(id);
 
     if (!connectionRow) {
       return NextResponse.json({ error: 'Connection not found' }, { status: 404 });

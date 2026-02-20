@@ -1,71 +1,45 @@
-import path from 'path';
-import fs from 'fs';
-import { createRequire } from 'node:module';
+import { createClient, type Client, type InStatement, type ResultSet, type Row } from '@libsql/client';
 
-type BetterSqliteDatabase = import('better-sqlite3').Database;
-type BetterSqliteModule = typeof import('better-sqlite3');
-const require = createRequire(import.meta.url);
+type DbClient = Client;
 
-const dbPath = path.join(process.cwd(), 'data', 'ide.db');
-const dbDir = path.dirname(dbPath);
-let dbInstance: BetterSqliteDatabase | null = null;
+let dbInstance: DbClient | null = null;
 let dbInitError: Error | null = null;
 
-function ensureDataDirectory() {
-  if (!fs.existsSync(dbDir)) {
-    fs.mkdirSync(dbDir, { recursive: true });
-  }
-}
+function getTursoConfig() {
+  const url = process.env.TURSO_DATABASE_URL;
+  const authToken = process.env.TURSO_AUTH_TOKEN;
 
-function loadBetterSqlite3(): BetterSqliteModule {
-  return require('better-sqlite3') as BetterSqliteModule;
+  if (!url) {
+    throw new Error('TURSO_DATABASE_URL environment variable is required');
+  }
+
+  return { url, authToken };
 }
 
 export function formatDatabaseInitError(cause: unknown): string {
   const causeMessage = cause instanceof Error ? cause.message : String(cause);
-  const isNodeModuleVersionMismatch = causeMessage.includes('NODE_MODULE_VERSION');
-
-  if (!isNodeModuleVersionMismatch) {
-    return `Failed to initialize database: ${causeMessage}`;
-  }
-
-  return [
-    'Failed to initialize database: better-sqlite3 native binding is compiled for a different Node.js version.',
-    'Rebuild dependencies for the active Node version (for example: npm rebuild better-sqlite3).',
-    `Original error: ${causeMessage}`,
-  ].join(' ');
+  return `Failed to initialize Turso database: ${causeMessage}`;
 }
 
-// Initialize database schema
-export function initializeDatabase(database: BetterSqliteDatabase) {
-  // Connections table
-  database.exec(`
+export async function initializeDatabase(database: DbClient) {
+  await database.execute(`
     CREATE TABLE IF NOT EXISTS connections (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
       type TEXT NOT NULL DEFAULT 'postgresql',
       host TEXT NOT NULL,
-      port INTEGER NOT NULL,
-      database TEXT NOT NULL,
-      username TEXT NOT NULL,
+      port INTEGER,
+      database TEXT,
+      username TEXT,
       encrypted_password TEXT NOT NULL,
-      ssl BOOLEAN DEFAULT 0,
+      ssl INTEGER DEFAULT 0,
       color TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
 
-  const connectionColumns = database
-    .prepare("PRAGMA table_info(connections)")
-    .all() as Array<{ name: string }>;
-  const hasColorColumn = connectionColumns.some((column) => column.name === 'color');
-  if (!hasColorColumn) {
-    database.exec('ALTER TABLE connections ADD COLUMN color TEXT');
-  }
-
-  // Saved queries table
-  database.exec(`
+  await database.execute(`
     CREATE TABLE IF NOT EXISTS saved_queries (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       connection_id INTEGER,
@@ -79,38 +53,35 @@ export function initializeDatabase(database: BetterSqliteDatabase) {
     )
   `);
 
-  // Query history table
-  database.exec(`
+  await database.execute(`
     CREATE TABLE IF NOT EXISTS query_history (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       connection_id INTEGER,
       query TEXT NOT NULL,
       executed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       execution_time INTEGER,
-      success BOOLEAN DEFAULT 1,
+      success INTEGER DEFAULT 1,
       error_message TEXT,
+      row_count INTEGER,
       FOREIGN KEY (connection_id) REFERENCES connections(id) ON DELETE SET NULL
     )
   `);
 
-  // Create indexes
-  database.exec(`
-    CREATE INDEX IF NOT EXISTS idx_saved_queries_connection ON saved_queries(connection_id);
-    CREATE INDEX IF NOT EXISTS idx_query_history_connection ON query_history(connection_id);
-    CREATE INDEX IF NOT EXISTS idx_query_history_executed_at ON query_history(executed_at);
-  `);
+  await database.batch([
+    { sql: `CREATE INDEX IF NOT EXISTS idx_saved_queries_connection ON saved_queries(connection_id)` },
+    { sql: `CREATE INDEX IF NOT EXISTS idx_query_history_connection ON query_history(connection_id)` },
+    { sql: `CREATE INDEX IF NOT EXISTS idx_query_history_executed_at ON query_history(executed_at)` },
+  ]);
 }
 
-function createDatabase(): BetterSqliteDatabase {
-  ensureDataDirectory();
-  const Database = loadBetterSqlite3();
-  const database = new Database(dbPath) as BetterSqliteDatabase;
-  database.pragma('foreign_keys = ON');
-  initializeDatabase(database);
+async function createDatabase(): Promise<DbClient> {
+  const config = getTursoConfig();
+  const database = createClient(config);
+  await initializeDatabase(database);
   return database;
 }
 
-export function getDb(): BetterSqliteDatabase {
+export async function getDb(): Promise<DbClient> {
   if (dbInstance) {
     return dbInstance;
   }
@@ -120,7 +91,7 @@ export function getDb(): BetterSqliteDatabase {
   }
 
   try {
-    dbInstance = createDatabase();
+    dbInstance = await createDatabase();
     return dbInstance;
   } catch (cause) {
     dbInitError = new Error(formatDatabaseInitError(cause));
@@ -129,15 +100,61 @@ export function getDb(): BetterSqliteDatabase {
   }
 }
 
-const db = new Proxy({} as BetterSqliteDatabase, {
-  get(_target, prop) {
-    const instance = getDb();
-    const properties = instance as unknown as Record<PropertyKey, unknown>;
-    const value = properties[prop];
-    return typeof value === 'function'
-      ? (value as (...args: unknown[]) => unknown).bind(instance)
-      : value;
+export interface PreparedAsyncStatement {
+  all: (...args: unknown[]) => Promise<Row[]>;
+  get: (...args: unknown[]) => Promise<Row | undefined>;
+  run: (...args: unknown[]) => Promise<{ changes: number; lastInsertRowid: number | bigint }>;
+}
+
+function prepareStatement(sql: string): PreparedAsyncStatement {
+  return {
+    async all(...args: unknown[]): Promise<Row[]> {
+      const db = await getDb();
+      const params = args.length === 1 && Array.isArray(args[0]) ? args[0] : args;
+      const result = await db.execute({ sql, args: params });
+      return result.rows;
+    },
+    async get(...args: unknown[]): Promise<Row | undefined> {
+      const db = await getDb();
+      const params = args.length === 1 && Array.isArray(args[0]) ? args[0] : args;
+      const result = await db.execute({ sql, args: params });
+      return result.rows[0];
+    },
+    async run(...args: unknown[]): Promise<{ changes: number; lastInsertRowid: number | bigint }> {
+      const db = await getDb();
+      const params = args.length === 1 && Array.isArray(args[0]) ? args[0] : args;
+      const result = await db.execute({ sql, args: params });
+      return {
+        changes: result.rowsAffected,
+        lastInsertRowid: result.lastInsertRowid ?? 0,
+      };
+    },
+  };
+}
+
+async function execAsync(sql: string): Promise<ResultSet> {
+  const db = await getDb();
+  return db.execute(sql);
+}
+
+interface AsyncDatabase {
+  prepare: (sql: string) => PreparedAsyncStatement;
+  exec: (sql: string) => Promise<ResultSet>;
+  execute: (statement: InStatement) => Promise<ResultSet>;
+  batch: (statements: InStatement[]) => Promise<ResultSet[]>;
+}
+
+const db: AsyncDatabase = {
+  prepare: prepareStatement,
+  exec: execAsync,
+  async execute(statement: InStatement): Promise<ResultSet> {
+    const database = await getDb();
+    return database.execute(statement);
   },
-});
+  async batch(statements: InStatement[]): Promise<ResultSet[]> {
+    const database = await getDb();
+    return database.batch(statements);
+  },
+};
 
 export default db;

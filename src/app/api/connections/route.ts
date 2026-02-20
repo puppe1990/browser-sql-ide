@@ -8,7 +8,7 @@ import { saveUploadedSqliteFile } from '@/lib/sqlite-files';
 
 export async function GET() {
   try {
-    const connections = db
+    const connections = await db
       .prepare('SELECT id, name, type, host, port, database, username, ssl, color, created_at, updated_at FROM connections ORDER BY created_at DESC')
       .all();
 
@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
 
     const normalizedColor = typeof color === 'string' && color.trim() ? color.trim() : null;
 
-    const result = db
+    const result = await db
       .prepare(
         'INSERT INTO connections (name, type, host, port, database, username, encrypted_password, ssl, color) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
       )
@@ -109,7 +109,7 @@ export async function POST(request: NextRequest) {
         normalizedColor
       );
 
-    const connection = db
+    const connection = await db
       .prepare('SELECT id, name, type, host, port, database, username, ssl, color, created_at, updated_at FROM connections WHERE id = ?')
       .get(result.lastInsertRowid);
 

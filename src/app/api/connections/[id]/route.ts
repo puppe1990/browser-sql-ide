@@ -5,7 +5,7 @@ import { encrypt } from '@/lib/encryption';
 import { dbConnector } from '@/lib/database-connectors';
 import { parseOptionalPositivePort } from '@/lib/port-params';
 import { parsePositiveIntRouteParam } from '@/lib/route-params';
-import { loadConnectionRowById, toPublicConnection } from '@/lib/server/connections';
+import { loadConnectionRowByIdAsync, toPublicConnection } from '@/lib/server/connections';
 import { getErrorMessage } from '@/lib/utils';
 import { deleteSqliteFileIfManaged, saveUploadedSqliteFile } from '@/lib/sqlite-files';
 
@@ -20,7 +20,7 @@ export async function GET(
       return NextResponse.json({ error: parsedId.error }, { status: 400 });
     }
     const id = parsedId.value as number;
-    const connectionRow = loadConnectionRowById(id);
+    const connectionRow = await loadConnectionRowByIdAsync(id);
 
     if (!connectionRow) {
       return NextResponse.json({ error: 'Connection not found' }, { status: 404 });
@@ -54,7 +54,7 @@ export async function PUT(
       return NextResponse.json({ error: parsedPort.error }, { status: 400 });
     }
 
-    const existing = loadConnectionRowById(id);
+    const existing = await loadConnectionRowByIdAsync(id);
 
     if (!existing) {
       return NextResponse.json({ error: 'Connection not found' }, { status: 404 });
@@ -113,7 +113,7 @@ export async function PUT(
         ? color.trim() || null
         : (existing.color ?? null);
 
-    db.prepare(
+    await db.prepare(
       'UPDATE connections SET name = ?, type = ?, host = ?, port = ?, database = ?, username = ?, encrypted_password = ?, ssl = ?, color = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
     ).run(
       nextName,
@@ -128,10 +128,9 @@ export async function PUT(
       id
     );
 
-    // Ensure a fresh pool is created with updated credentials on next use.
     await dbConnector.disconnect(id);
 
-    const updatedConnectionRow = loadConnectionRowById(id);
+    const updatedConnectionRow = await loadConnectionRowByIdAsync(id);
 
     if (!updatedConnectionRow) {
       return NextResponse.json({ error: 'Connection not found' }, { status: 404 });
@@ -154,16 +153,15 @@ export async function DELETE(
       return NextResponse.json({ error: parsedId.error }, { status: 400 });
     }
     const id = parsedId.value as number;
-    const connection = loadConnectionRowById(id);
+    const connection = await loadConnectionRowByIdAsync(id);
 
     if (!connection) {
       return NextResponse.json({ error: 'Connection not found' }, { status: 404 });
     }
 
-    // Disconnect if connected
     await dbConnector.disconnect(id);
 
-    const result = db.prepare('DELETE FROM connections WHERE id = ?').run(id);
+    const result = await db.prepare('DELETE FROM connections WHERE id = ?').run(id);
 
     if (result.changes === 0) {
       return NextResponse.json({ error: 'Connection not found' }, { status: 404 });

@@ -1,8 +1,9 @@
-import { createRequire } from 'node:module';
 import type { DatabaseConnection } from '../database-connectors';
 import type { DbConnectionRow } from '../../types';
+import db from '../db';
+import { decrypt } from '../encryption';
 
-type ConnectionRowLoader = (connectionId: number) => DbConnectionRow | undefined;
+type ConnectionRowLoader = (connectionId: number) => Promise<DbConnectionRow | undefined>;
 type PasswordDecryptor = (encryptedPassword: string) => string;
 
 type LoadConnectionOptions = {
@@ -24,19 +25,12 @@ export type PublicConnection = {
   updated_at?: string;
 };
 
-const require = createRequire(import.meta.url);
-
-const defaultLoadRow: ConnectionRowLoader = (connectionId) => {
-  const dbModule = require('../db');
-  const db = dbModule.default;
-  return db.prepare('SELECT * FROM connections WHERE id = ?').get(connectionId) as
-    | DbConnectionRow
-    | undefined;
+const defaultLoadRow: ConnectionRowLoader = async (connectionId) => {
+  return db.prepare('SELECT * FROM connections WHERE id = ?').get(connectionId) as Promise<DbConnectionRow | undefined>;
 };
 
 const defaultDecryptPassword: PasswordDecryptor = (encryptedPassword) => {
-  const encryptionModule = require('../encryption');
-  return encryptionModule.decrypt(encryptedPassword);
+  return decrypt(encryptedPassword);
 };
 
 export function hydrateConnectionRow(
@@ -72,20 +66,20 @@ export function toPublicConnection(connectionRow: DbConnectionRow): PublicConnec
   };
 }
 
-export function loadConnectionRowById(
+export async function loadConnectionRowByIdAsync(
   connectionId: number,
   options: Pick<LoadConnectionOptions, 'loadRow'> = {}
-): DbConnectionRow | undefined {
+): Promise<DbConnectionRow | undefined> {
   const loadRow = options.loadRow ?? defaultLoadRow;
   return loadRow(connectionId);
 }
 
-export function loadDecryptedConnectionById(
+export async function loadDecryptedConnectionByIdAsync(
   connectionId: number,
   options: LoadConnectionOptions = {}
-): DatabaseConnection | undefined {
+): Promise<DatabaseConnection | undefined> {
   const decryptPassword = options.decryptPassword ?? defaultDecryptPassword;
-  const connectionRow = loadConnectionRowById(connectionId, { loadRow: options.loadRow });
+  const connectionRow = await loadConnectionRowByIdAsync(connectionId, { loadRow: options.loadRow });
 
   if (!connectionRow) {
     return undefined;
@@ -93,3 +87,6 @@ export function loadDecryptedConnectionById(
 
   return hydrateConnectionRow(connectionRow, decryptPassword);
 }
+
+export { loadConnectionRowByIdAsync as loadConnectionRowById };
+export { loadDecryptedConnectionByIdAsync as loadDecryptedConnectionById };

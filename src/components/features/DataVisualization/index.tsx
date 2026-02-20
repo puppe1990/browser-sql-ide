@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { FormEvent } from 'react';
 import { Code2, Copy, Loader2, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
 import type { QueryResult, RowData } from '@/types';
+import { memo } from 'react';
 import ResultsHeader from './_components/ResultsHeader';
 import ResultsTable from './_components/ResultsTable';
 import type { DisplayRow, SelectedCell } from './_components/ResultsTable';
@@ -30,7 +31,7 @@ interface DataVisualizationProps {
   isLoading?: boolean; // Loading state
 }
 
-export default function DataVisualization({ result, connectionId, query, isLoading = false }: DataVisualizationProps) {
+function DataVisualization({ result, connectionId, query, isLoading = false }: DataVisualizationProps) {
   const [expanded, setExpanded] = useState(false);
   const [allRows, setAllRows] = useState<RowData[]>(result.rows);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -56,6 +57,7 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const currentOffset = useRef(result.rows.length);
   const originalRowsRef = useRef<RowData[]>(result.rows);
+  const queryRef = useRef(query);
   const { connections, selectedConnectionId, setSelectedConnectionId } = useConnections({});
   const connectionName = useMemo(() => {
     if (result.connectionName) return result.connectionName;
@@ -76,15 +78,19 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
     setTotalCount(result.totalCount);
     currentOffset.current = result.rows.length;
     originalRowsRef.current = result.rows;
-    setEditMode(false);
-    setEditedCells({});
-    setAddedRows([]);
-    setDeletedRowIndices([]);
-    setSelectedCell(null);
-    setKeyColumns([]);
-    setShowScriptModal(false);
-    setShowCellEditor(false);
-  }, [result]);
+    // Só resetar editMode se a query mudou (não quando a paginação carrega mais dados)
+    if (queryRef.current !== query) {
+      queryRef.current = query;
+      setEditMode(false);
+      setEditedCells({});
+      setAddedRows([]);
+      setDeletedRowIndices([]);
+      setSelectedCell(null);
+      setKeyColumns([]);
+      setShowScriptModal(false);
+      setShowCellEditor(false);
+    }
+  }, [result, query]);
 
   useEffect(() => {
     if (!showInsertModal) {
@@ -306,6 +312,8 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
   const handleToggleKeyColumn = useCallback((column: string) => {
     setKeyColumns((prev) => (prev.includes(column) ? prev.filter((col) => col !== column) : [...prev, column]));
   }, []);
+
+
 
   const buildWhereClause = useCallback(
     (row: RowData) => {
@@ -857,7 +865,7 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
           </div>
           {requiresKeyColumns && keyColumns.length === 0 && (
             <div className="text-[11px] text-amber-600 dark:text-amber-400">
-              Selecione colunas-chave no cabeçalho para salvar atualizações.
+              Clique no ícone 🔑 no cabeçalho da coluna ID para definir a chave primária.
             </div>
           )}
         </div>
@@ -1097,3 +1105,5 @@ export default function DataVisualization({ result, connectionId, query, isLoadi
     </div>
   );
 }
+
+export default memo(DataVisualization);

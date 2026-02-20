@@ -1,11 +1,13 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import { getErrorMessage } from '@/lib/utils';
 import Sidebar from './_components/Sidebar';
 import type { Connection } from './types';
+import type { QueryResultWithMeta } from './types';
+import type { ActiveTabPayload } from '@/components/features/TabbedQueryEditor/types';
 import MainContent from './_components/MainContent';
 import { useCompare } from './_hooks/useCompare';
 import { useConnections } from './_hooks/useConnections';
@@ -102,6 +104,27 @@ export default function Home() {
     }
   };
 
+  const handleQueryResult1 = useCallback(
+    (result: QueryResultWithMeta, query?: string) => handleQueryResult(result, query, false),
+    [handleQueryResult],
+  );
+  const handleQueryResult2 = useCallback(
+    (result: QueryResultWithMeta, query?: string) => handleQueryResult(result, query, true),
+    [handleQueryResult],
+  );
+  const handleActiveTabChange1 = useCallback(
+    (tab: ActiveTabPayload) => handleActiveTabChange(tab, false),
+    [handleActiveTabChange],
+  );
+  const handleActiveTabChange2 = useCallback(
+    (tab: ActiveTabPayload) => handleActiveTabChange(tab, true),
+    [handleActiveTabChange],
+  );
+  const handleActiveTabChangeSingle = useCallback(
+    (tab: ActiveTabPayload) => handleActiveTabChange(tab, false),
+    [handleActiveTabChange],
+  );
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       <div className="flex h-screen overflow-hidden">
@@ -167,14 +190,14 @@ export default function Home() {
           }}
           selectedConnectionId={selectedConnection?.id}
           onQuerySave={handleQuerySave}
-          onQueryResult1={(result, query) => handleQueryResult(result, query, false)}
-          onQueryResult2={(result, query) => handleQueryResult(result, query, true)}
+          onQueryResult1={handleQueryResult1}
+          onQueryResult2={handleQueryResult2}
           onQueryResultSingle={handleQueryResult}
           onActiveQueryChange1={setActiveQuery1}
           onActiveQueryChange2={setActiveQuery2}
-          onActiveTabChange1={(tab) => handleActiveTabChange(tab, false)}
-          onActiveTabChange2={(tab) => handleActiveTabChange(tab, true)}
-          onActiveTabChangeSingle={(tab) => handleActiveTabChange(tab, false)}
+          onActiveTabChange1={handleActiveTabChange1}
+          onActiveTabChange2={handleActiveTabChange2}
+          onActiveTabChangeSingle={handleActiveTabChangeSingle}
           onConnectionChange1={setActiveConnectionId1}
           onConnectionChange2={setActiveConnectionId2}
           onQueryStart1={() => setIsLoadingResult1(true)}

@@ -3,6 +3,7 @@
 import { PanelLeftClose } from 'lucide-react';
 import ConnectionManager from '@/components/features/ConnectionManager';
 import SavedQueries from '@/components/features/SavedQueries';
+import UserMenu from './UserMenu';
 import type { Connection } from '../types';
 
 type SidebarProps = {
@@ -62,6 +63,7 @@ export default function Sidebar({
               />
             </div>
           </div>
+          <UserMenu />
         </>
       )}
     </aside>

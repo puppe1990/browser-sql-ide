@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { getErrorMessage } from '@/lib/utils';
 import { processQuery } from '@/lib/query-utils';
 import type { QueryResult } from '@/types';
@@ -44,7 +44,7 @@ export function useQueryExecution({
   const [isLoadingResult2, setIsLoadingResult2] = useState(false);
   const [pendingCompareRestore, setPendingCompareRestore] = useState<PendingCompareRestore | null>(null);
 
-  const handleActiveTabChange = (tab: ActiveTabPayload, isSecondEditor?: boolean) => {
+  const handleActiveTabChange = useCallback((tab: ActiveTabPayload, isSecondEditor?: boolean) => {
     const resolvedIsSecond = Boolean(isSecondEditor);
     const nextResult = tab.result
       ? { ...tab.result, query: tab.lastExecutedQuery ?? tab.query }
@@ -63,9 +63,9 @@ export function useQueryExecution({
         typeof tab.connectionId === 'number' ? tab.connectionId : undefined,
       );
     }
-  };
+  }, []);
 
-  const handleQueryResult = (result: QueryResult, query?: string, isSecondEditor?: boolean) => {
+  const handleQueryResult = useCallback((result: QueryResult, query?: string, isSecondEditor?: boolean) => {
     const resolvedIsSecond =
       typeof isSecondEditor === 'boolean'
         ? isSecondEditor
@@ -86,7 +86,7 @@ export function useQueryExecution({
         setSavedQueries((prev) => ({ ...prev, query1: query }));
       }
     }
-  };
+  }, []);
 
   const handleExecuteActiveTabs = async () => {
     const query1 = activeQuery1?.trim();

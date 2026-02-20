@@ -22,13 +22,13 @@ export async function GET(request: NextRequest) {
 
     let history;
     if (parsedConnectionId.value !== undefined) {
-      history = db
+      history = await db
         .prepare(
           'SELECT * FROM query_history WHERE connection_id = ? ORDER BY executed_at DESC LIMIT ?'
         )
         .all(parsedConnectionId.value, limitValue);
     } else {
-      history = db
+      history = await db
         .prepare('SELECT * FROM query_history ORDER BY executed_at DESC LIMIT ?')
         .all(limitValue);
     }

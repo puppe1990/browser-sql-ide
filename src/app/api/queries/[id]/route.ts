@@ -27,7 +27,7 @@ export async function GET(
       return NextResponse.json({ error: parsedId.error }, { status: 400 });
     }
     const id = parsedId.value as number;
-    const query = db
+    const query = await db
       .prepare('SELECT * FROM saved_queries WHERE id = ?')
       .get(id) as SavedQueryRow | undefined;
 
@@ -63,7 +63,7 @@ export async function PUT(
     }
     const { name, query, description, folder } = parsedPayload;
 
-    const existing = db
+    const existing = await db
       .prepare('SELECT * FROM saved_queries WHERE id = ?')
       .get(id) as SavedQueryRow | undefined;
 
@@ -76,11 +76,11 @@ export async function PUT(
     const nextDescription = description === undefined ? existing.description : description;
     const nextFolder = folder === undefined ? existing.folder : folder;
 
-    db.prepare(
+    await db.prepare(
       'UPDATE saved_queries SET name = ?, query = ?, description = ?, folder = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
     ).run(nextName, nextQuery, nextDescription, nextFolder, id);
 
-    const updatedQuery = db
+    const updatedQuery = await db
       .prepare('SELECT * FROM saved_queries WHERE id = ?')
       .get(id) as SavedQueryRow | undefined;
 
@@ -101,7 +101,7 @@ export async function DELETE(
       return NextResponse.json({ error: parsedId.error }, { status: 400 });
     }
     const id = parsedId.value as number;
-    const result = db.prepare('DELETE FROM saved_queries WHERE id = ?').run(id);
+    const result = await db.prepare('DELETE FROM saved_queries WHERE id = ?').run(id);
 
     if (result.changes === 0) {
       return NextResponse.json({ error: 'Query not found' }, { status: 404 });

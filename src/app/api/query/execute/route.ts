@@ -3,7 +3,7 @@ import db from '@/lib/db';
 import { dbConnector } from '@/lib/database-connectors';
 import { parseConnectionAndQueryPayload } from '@/lib/query-request-params';
 import { parseJsonObjectBody } from '@/lib/request-body';
-import { loadDecryptedConnectionById } from '@/lib/server/connections';
+import { loadDecryptedConnectionByIdAsync } from '@/lib/server/connections';
 import { getErrorMessage } from '@/lib/utils';
 
 type ExecuteQueryPayload = {
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     const connectionId = parsedRequest.connectionId as number;
     const query = parsedRequest.query as string;
 
-    const connection = loadDecryptedConnectionById(connectionId);
+    const connection = await loadDecryptedConnectionByIdAsync(connectionId);
     if (!connection) {
       return NextResponse.json({ error: 'Connection not found' }, { status: 404 });
     }
@@ -34,12 +34,10 @@ export async function POST(request: NextRequest) {
     const startTime = Date.now();
 
     try {
-      // Execute query with pagination (first 100 rows)
       const result = await dbConnector.executeQuery(connection, query, 0, 100);
       const executionTime = Date.now() - startTime;
 
-      // Save to history
-      db.prepare(
+      await db.prepare(
         'INSERT INTO query_history (connection_id, query, execution_time, success) VALUES (?, ?, ?, ?)'
       ).run(connectionId, query, executionTime, 1);
 
@@ -55,8 +53,7 @@ export async function POST(request: NextRequest) {
       const errorMessage = getErrorMessage(error);
       const executionTime = Date.now() - startTime;
 
-      // Save failed query to history
-      db.prepare(
+      await db.prepare(
         'INSERT INTO query_history (connection_id, query, execution_time, success, error_message) VALUES (?, ?, ?, ?, ?)'
       ).run(connectionId, query, executionTime, 0, errorMessage);
 

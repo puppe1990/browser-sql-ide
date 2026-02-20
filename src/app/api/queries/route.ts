@@ -16,13 +16,13 @@ export async function GET(request: NextRequest) {
 
     let queries;
     if (parsedConnectionId.value !== undefined) {
-      queries = db
+      queries = await db
         .prepare(
           'SELECT * FROM saved_queries WHERE connection_id = ? ORDER BY created_at DESC'
         )
         .all(parsedConnectionId.value);
     } else {
-      queries = db
+      queries = await db
         .prepare('SELECT * FROM saved_queries ORDER BY created_at DESC')
         .all();
     }
@@ -46,13 +46,13 @@ export async function POST(request: NextRequest) {
     }
     const { connectionId, name, query, description, folder } = parsedPayload;
 
-    const result = db
+    const result = await db
       .prepare(
         'INSERT INTO saved_queries (connection_id, name, query, description, folder) VALUES (?, ?, ?, ?, ?)'
       )
       .run(connectionId ?? null, name, query, description ?? null, folder ?? null);
 
-    const savedQuery = db
+    const savedQuery = await db
       .prepare('SELECT * FROM saved_queries WHERE id = ?')
       .get(result.lastInsertRowid);
 

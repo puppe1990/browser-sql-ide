@@ -3,7 +3,7 @@ import { dbConnector } from '@/lib/database-connectors';
 import { parsePaginationLimit, parsePaginationOffset } from '@/lib/pagination-params';
 import { parseConnectionAndQueryPayload } from '@/lib/query-request-params';
 import { parseJsonObjectBody } from '@/lib/request-body';
-import { loadDecryptedConnectionById } from '@/lib/server/connections';
+import { loadDecryptedConnectionByIdAsync } from '@/lib/server/connections';
 import { getErrorMessage } from '@/lib/utils';
 
 type PaginateQueryPayload = {
@@ -41,13 +41,12 @@ export async function POST(request: NextRequest) {
     const offsetValue = parsedOffset.value as number;
     const limitValue = parsedLimit.value as number;
 
-    const connection = loadDecryptedConnectionById(normalizedConnectionId);
+    const connection = await loadDecryptedConnectionByIdAsync(normalizedConnectionId);
     if (!connection) {
       return NextResponse.json({ error: 'Connection not found' }, { status: 404 });
     }
 
     try {
-      // Execute query with pagination
       const result = await dbConnector.executeQuery(connection, query, offsetValue, limitValue);
 
       return NextResponse.json({

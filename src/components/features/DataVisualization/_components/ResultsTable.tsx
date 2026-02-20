@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import type { KeyboardEvent } from 'react';
 import { KeyRound, Loader2 } from 'lucide-react';
 import type { QueryResult, RowData } from '@/types';
@@ -50,31 +50,49 @@ export default function ResultsTable({
 }: ResultsTableProps) {
   const [editingCell, setEditingCell] = useState<SelectedCell | null>(null);
   const [draftValue, setDraftValue] = useState('');
+  const ignoreBlurRef = useRef(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const editModeRef = useRef(editMode);
+  
+  useEffect(() => {
+    editModeRef.current = editMode;
+  }, [editMode]);
 
   const deletedRowLookup = useMemo(() => new Set(deletedRowIndices), [deletedRowIndices]);
 
-  const startEditing = (cell: SelectedCell, value: unknown) => {
-    if (!editMode) return;
+  useEffect(() => {
+    if (editingCell && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editingCell]);
+
+  const startEditing = useCallback((cell: SelectedCell, value: unknown) => {
+    if (!editModeRef.current) return;
     setEditingCell(cell);
+    ignoreBlurRef.current = true;
+    setTimeout(() => {
+      ignoreBlurRef.current = false;
+    }, 100);
     if (value === null || value === undefined) {
       setDraftValue('');
       return;
     }
     setDraftValue(typeof value === 'string' ? value : JSON.stringify(value));
-  };
+  }, []);
 
-  const commitEdit = () => {
-    if (!editingCell) return;
+  const commitEdit = useCallback(() => {
+    if (!editingCell || ignoreBlurRef.current) return;
     onCellChange(editingCell, draftValue);
     setEditingCell(null);
-  };
+  }, [editingCell, draftValue, onCellChange]);
 
-  const cancelEdit = () => {
+  const cancelEdit = useCallback(() => {
     setEditingCell(null);
-  };
+  }, []);
 
-  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (!editMode || !selectedCell) return;
+  const handleKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
+    if (!editModeRef.current || !selectedCell) return;
     if (!selectedCell.isNew && deletedRowLookup.has(selectedCell.rowIndex)) return;
     if (event.key === 'Enter') {
       event.preventDefault();
@@ -85,7 +103,7 @@ export default function ResultsTable({
     if (event.key === 'Escape') {
       cancelEdit();
     }
-  };
+  }, [selectedCell, deletedRowLookup, rows, startEditing, cancelEdit]);
 
   return (
     <div
@@ -184,9 +202,9 @@ export default function ResultsTable({
                   >
                     {isEditing ? (
                       <input
+                        ref={inputRef}
                         className="w-full text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                         value={draftValue}
-                        autoFocus
                         onChange={(event) => setDraftValue(event.target.value)}
                         onBlur={commitEdit}
                         onKeyDown={(event) => {

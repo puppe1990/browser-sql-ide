@@ -26,6 +26,7 @@
     "tailwind-merge": "^2.1.0"
   },
   "devDependencies": {
+    "@netlify/plugin-nextjs": "^5.15.8",
     "@types/better-sqlite3": "^7.6.8",
     "@types/crypto-js": "^4.2.1",
     "@types/node": "^20.10.0",

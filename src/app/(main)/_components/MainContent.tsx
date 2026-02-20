@@ -11,6 +11,8 @@ import type { ComparisonResult } from '@/types';
 import type { QueryResultWithMeta } from '../types';
 import type { ActiveTabPayload } from '@/components/features/TabbedQueryEditor/types';
 
+const EMPTY_RESULT: QueryResultWithMeta = { columns: [], rows: [], rowCount: 0, executionTime: 0 };
+
 type MainContentProps = {
   sidebarOpen: boolean;
   onOpenSidebar: () => void;
@@ -306,7 +308,7 @@ export default function MainContent({
                   />
                 ) : (
                   <DataVisualization
-                    result={{ columns: [], rows: [], rowCount: 0, executionTime: 0 }}
+                    result={EMPTY_RESULT}
                     connectionId={selectedConnectionId}
                     isLoading={isLoadingResult1}
                   />
@@ -327,7 +329,7 @@ export default function MainContent({
                   />
                 ) : (
                   <DataVisualization
-                    result={{ columns: [], rows: [], rowCount: 0, executionTime: 0 }}
+                    result={EMPTY_RESULT}
                     connectionId={selectedConnectionId}
                     isLoading={isLoadingResult2}
                   />
@@ -360,7 +362,7 @@ export default function MainContent({
               />
             ) : (
               <DataVisualization
-                result={{ columns: [], rows: [], rowCount: 0, executionTime: 0 }}
+                result={EMPTY_RESULT}
                 connectionId={selectedConnectionId}
                 isLoading={isLoadingResult1}
               />
