@@ -1,14 +1,14 @@
 {
-  "/_not-found/page": "/_not-found",
   "/_global-error/page": "/_global-error",
+  "/_not-found/page": "/_not-found",
   "/api/auth/session/route": "/api/auth/session",
-  "/api/auth/signin/route": "/api/auth/signin",
   "/api/auth/signup/route": "/api/auth/signup",
-  "/api/connections/[id]/route": "/api/connections/[id]",
+  "/api/auth/signin/route": "/api/auth/signin",
   "/api/connections/[id]/metadata/route": "/api/connections/[id]/metadata",
+  "/api/connections/[id]/test/route": "/api/connections/[id]/test",
   "/api/connections/route": "/api/connections",
   "/api/auth/signout/route": "/api/auth/signout",
-  "/api/connections/[id]/test/route": "/api/connections/[id]/test",
+  "/api/connections/[id]/route": "/api/connections/[id]",
   "/api/health/route": "/api/health",
   "/api/history/route": "/api/history",
   "/api/connections/test/route": "/api/connections/test",
@@ -19,6 +19,6 @@
   "/apple-icon.png/route": "/apple-icon.png",
   "/icon.png/route": "/icon.png",
   "/(main)/page": "/",
-  "/(auth)/signin/page": "/signin",
-  "/(auth)/signup/page": "/signup"
+  "/(auth)/signup/page": "/signup",
+  "/(auth)/signin/page": "/signin"
 }
