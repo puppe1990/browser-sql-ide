@@ -8,6 +8,13 @@ type SigninPayload = {
   password?: string;
 };
 
+type UserRow = {
+  id: number;
+  email: string;
+  password_hash: string;
+  name: string | null;
+};
+
 export async function POST(request: NextRequest) {
   try {
     const parsedBody = await parseJsonObjectBody<SigninPayload>(request);
@@ -26,7 +33,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
     }
 
-    const userRecord = user as { id: number; email: string; password_hash: string; name: string | null };
+    const userRecord = user as unknown as UserRow;
     const isValid = verifyPassword(password, userRecord.password_hash);
     if (!isValid) {
       return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });

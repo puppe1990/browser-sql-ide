@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getSessionUser, SESSION_COOKIE_NAME } from '@/lib/auth';
 
+type UserRow = {
+  id: number;
+  email: string;
+  name: string | null;
+};
+
 export async function GET(request: Request) {
   const sessionId = request.headers
     .get('cookie')
@@ -14,7 +20,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ user: null });
   }
 
-  const userRecord = user as { id: number; email: string; name: string | null };
+  const userRecord = user as unknown as UserRow;
   return NextResponse.json({
     user: {
       id: userRecord.id,

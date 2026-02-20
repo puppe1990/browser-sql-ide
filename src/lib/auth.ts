@@ -4,6 +4,13 @@ import crypto from 'crypto';
 const SESSION_COOKIE_NAME = 'session_id';
 const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
 
+type SessionRow = {
+  id: string;
+  user_id: number;
+  expires_at: string;
+  created_at: string;
+};
+
 export function hashPassword(password: string): string {
   const salt = crypto.randomBytes(16).toString('hex');
   const hash = crypto.pbkdf2Sync(password, salt, 100000, 64, 'sha256').toString('hex');
@@ -65,7 +72,8 @@ export async function getSessionUser(sessionId: string | undefined) {
   if (!sessionId) return null;
   const session = await getSession(sessionId);
   if (!session) return null;
-  const user = await getUserById((session as { user_id: number }).user_id);
+  const sessionRow = session as unknown as SessionRow;
+  const user = await getUserById(sessionRow.user_id);
   if (!user) return null;
   return user;
 }
