@@ -110,6 +110,12 @@
       "namedRegex": "^/api/connections/test(?:/)?$"
     },
     {
+      "page": "/api/health",
+      "regex": "^/api/health(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/health(?:/)?$"
+    },
+    {
       "page": "/api/history",
       "regex": "^/api/history(?:/)?$",
       "routeKeys": {},
