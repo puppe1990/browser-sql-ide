@@ -2,7 +2,7 @@
 
 Web SQL IDE built with Next.js for managing connections, running queries, editing results, and comparing outputs side by side.
 
-Current connectors: PostgreSQL, SQLite (uploaded file), and Turso/libSQL.
+Current connectors: PostgreSQL, SQLite (uploaded file, local only), and Turso/libSQL.
 
 ![Browser SQL IDE Interface](./print.png)
 
@@ -32,13 +32,14 @@ Current connectors: PostgreSQL, SQLite (uploaded file), and Turso/libSQL.
 
 ## Tech stack
 
-- Next.js 14 (App Router), React 18, TypeScript
+- Next.js 16 (App Router), React 19, TypeScript
 - Next.js Route Handlers (Node runtime)
-- SQLite (`better-sqlite3`) for app metadata (`data/ide.db`)
+- Turso/libSQL for app metadata in production
+- SQLite (`better-sqlite3`) for app metadata in local development (`data/ide.db`)
 - Connectors:
   - PostgreSQL via `pg`
   - SQLite via `better-sqlite3`
-  - Turso/libSQL via `@libsql/client`
+  - Turso/libSQL via `@libsql/client/web`
 - Tailwind CSS + Lucide icons
 - Monaco editor (`@monaco-editor/react`)
 - AES credential encryption (`crypto-js`)
@@ -71,6 +72,23 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+## Netlify + Turso setup
+
+For Netlify deployments, set these environment variables in the Netlify project:
+
+```env
+ENCRYPTION_KEY=replace-with-a-strong-random-secret
+TURSO_DATABASE_URL=libsql://<your-db>.turso.io
+TURSO_AUTH_TOKEN=<your-turso-auth-token>
+```
+
+Notes for Netlify:
+
+- The app metadata database (users, sessions, saved queries, history, connections) uses Turso.
+- SQLite uploaded-file connections are disabled on Netlify because serverless filesystem storage is ephemeral.
+- Turso and PostgreSQL connections are supported on Netlify.
+- Authentication is required for app pages and protected API routes.
+
 ## Local data and files
 
 - App metadata DB: `data/ide.db`
@@ -78,6 +96,12 @@ Open [http://localhost:3000](http://localhost:3000).
 - Connection credentials are stored encrypted in `data/ide.db`.
 
 ## API reference
+
+Authentication notes:
+
+- Public auth endpoints: `/api/auth/signin`, `/api/auth/signup`, `/api/auth/signout`, `/api/auth/session`
+- Health endpoint: `/api/health`
+- All database/data endpoints below require an authenticated session cookie (`session_id`)
 
 ### Connections
 
@@ -123,7 +147,8 @@ Metadata categories:
 - Metadata endpoint is PostgreSQL-only.
 - Connection JSON export does not include passwords/tokens for security.
 - Importing connections from JSON works for PostgreSQL/Turso payloads; SQLite connection creation requires a file upload.
-- There is no auth layer yet; this should be treated as a trusted/internal admin tool.
+- Uploaded SQLite files are intended for local/self-hosted usage; they are not persisted in Netlify serverless runtime.
+- Credentials are encrypted at rest in the metadata database, but anyone with DB-level access can still read encrypted records.
 
 ## Scripts
 
