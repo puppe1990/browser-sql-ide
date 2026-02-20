@@ -22,56 +22,83 @@ export function formatDatabaseInitError(cause: unknown): string {
 }
 
 export async function initializeDatabase(database: DbClient) {
-  await database.execute(`
-    CREATE TABLE IF NOT EXISTS connections (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      type TEXT NOT NULL DEFAULT 'postgresql',
-      host TEXT NOT NULL,
-      port INTEGER,
-      database TEXT,
-      username TEXT,
-      encrypted_password TEXT NOT NULL,
-      ssl INTEGER DEFAULT 0,
-      color TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
+  try {
+    await database.execute(`
+      CREATE TABLE IF NOT EXISTS connections (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL DEFAULT 'postgresql',
+        host TEXT NOT NULL,
+        port INTEGER,
+        database TEXT,
+        username TEXT,
+        encrypted_password TEXT NOT NULL,
+        ssl INTEGER DEFAULT 0,
+        color TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
 
-  await database.execute(`
-    CREATE TABLE IF NOT EXISTS saved_queries (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      connection_id INTEGER,
-      name TEXT NOT NULL,
-      query TEXT NOT NULL,
-      description TEXT,
-      folder TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (connection_id) REFERENCES connections(id) ON DELETE SET NULL
-    )
-  `);
+    await database.execute(`
+      CREATE TABLE IF NOT EXISTS saved_queries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        connection_id INTEGER,
+        name TEXT NOT NULL,
+        query TEXT NOT NULL,
+        description TEXT,
+        folder TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (connection_id) REFERENCES connections(id) ON DELETE SET NULL
+      )
+    `);
 
-  await database.execute(`
-    CREATE TABLE IF NOT EXISTS query_history (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      connection_id INTEGER,
-      query TEXT NOT NULL,
-      executed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      execution_time INTEGER,
-      success INTEGER DEFAULT 1,
-      error_message TEXT,
-      row_count INTEGER,
-      FOREIGN KEY (connection_id) REFERENCES connections(id) ON DELETE SET NULL
-    )
-  `);
+    await database.execute(`
+      CREATE TABLE IF NOT EXISTS query_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        connection_id INTEGER,
+        query TEXT NOT NULL,
+        executed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        execution_time INTEGER,
+        success INTEGER DEFAULT 1,
+        error_message TEXT,
+        row_count INTEGER,
+        FOREIGN KEY (connection_id) REFERENCES connections(id) ON DELETE SET NULL
+      )
+    `);
 
-  await database.batch([
-    { sql: `CREATE INDEX IF NOT EXISTS idx_saved_queries_connection ON saved_queries(connection_id)` },
-    { sql: `CREATE INDEX IF NOT EXISTS idx_query_history_connection ON query_history(connection_id)` },
-    { sql: `CREATE INDEX IF NOT EXISTS idx_query_history_executed_at ON query_history(executed_at)` },
-  ]);
+    await database.execute(`
+      CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        name TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await database.execute(`
+      CREATE TABLE IF NOT EXISTS sessions (
+        id TEXT PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        expires_at DATETIME NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+
+    await database.batch([
+      { sql: `CREATE INDEX IF NOT EXISTS idx_saved_queries_connection ON saved_queries(connection_id)` },
+      { sql: `CREATE INDEX IF NOT EXISTS idx_query_history_connection ON query_history(connection_id)` },
+      { sql: `CREATE INDEX IF NOT EXISTS idx_query_history_executed_at ON query_history(executed_at)` },
+      { sql: `CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)` },
+      { sql: `CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)` },
+    ]);
+  } catch (error) {
+    console.error('Database initialization error:', error);
+  }
 }
 
 async function createDatabase(): Promise<DbClient> {

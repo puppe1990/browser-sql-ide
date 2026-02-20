@@ -1,0 +1,46 @@
+{
+  "name": "browser-sql-ide",
+  "version": "1.0.0",
+  "description": "A comprehensive web-based SQL IDE for database management",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build --webpack",
+    "start": "next start",
+    "lint": "eslint .",
+    "test": "node --test --experimental-strip-types tests/**/*.test.ts"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.17.0",
+    "@monaco-editor/react": "^4.6.0",
+    "better-sqlite3": "^11.6.0",
+    "clsx": "^2.0.0",
+    "crypto-js": "^4.2.0",
+    "lucide-react": "^0.294.0",
+    "monaco-editor": "^0.44.0",
+    "next": "^16.1.6",
+    "pg": "^8.11.3",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "recharts": "^2.10.3",
+    "tailwind-merge": "^2.1.0"
+  },
+  "devDependencies": {
+    "@netlify/plugin-nextjs": "^5.15.8",
+    "@types/better-sqlite3": "^7.6.8",
+    "@types/crypto-js": "^4.2.1",
+    "@types/node": "^20.10.0",
+    "@types/pg": "^8.10.9",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "autoprefixer": "^10.4.16",
+    "eslint": "^9.39.2",
+    "eslint-config-next": "^16.1.6",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.3.6",
+    "typescript": "^5.3.3"
+  },
+  "optionalDependencies": {
+    "@next/swc-darwin-arm64": "^16.1.6"
+  }
+}
