@@ -1,4 +1,4 @@
-import { createClient, type Client, type InStatement, type ResultSet, type Row } from '@libsql/client';
+import { createClient, type Client, type InStatement, type ResultSet, type Row } from '@libsql/client/web';
 
 type DbClient = Client;
 

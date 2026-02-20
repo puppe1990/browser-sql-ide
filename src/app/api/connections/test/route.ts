@@ -5,10 +5,14 @@ import path from 'path';
 import { readConnectionPayload, type ConnectionPayload } from '@/lib/connection-payload';
 import { dbConnector } from '@/lib/database-connectors';
 import { parseOptionalPositivePort } from '@/lib/port-params';
+import { requireAuthenticatedUser } from '@/lib/require-auth';
 import { getErrorMessage } from '@/lib/utils';
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAuthenticatedUser(request);
+    if (auth.error) return auth.error;
+
     const parsedPayload = await readConnectionPayload(request);
     if (parsedPayload.error) {
       return NextResponse.json(

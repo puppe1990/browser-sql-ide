@@ -5,15 +5,23 @@ import { encrypt } from '@/lib/encryption';
 import { dbConnector } from '@/lib/database-connectors';
 import { parseOptionalPositivePort } from '@/lib/port-params';
 import { parsePositiveIntRouteParam } from '@/lib/route-params';
+import { requireAuthenticatedUser } from '@/lib/require-auth';
 import { loadConnectionRowByIdAsync, toPublicConnection } from '@/lib/server/connections';
 import { getErrorMessage } from '@/lib/utils';
-import { deleteSqliteFileIfManaged, saveUploadedSqliteFile } from '@/lib/sqlite-files';
+import {
+  deleteSqliteFileIfManaged,
+  saveUploadedSqliteFile,
+  supportsPersistentSqliteStorage,
+} from '@/lib/sqlite-files';
 
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = await requireAuthenticatedUser(request);
+    if (auth.error) return auth.error;
+
     const { id: routeId } = await context.params;
     const parsedId = parsePositiveIntRouteParam(routeId, 'Connection ID');
     if (parsedId.error) {
@@ -37,6 +45,9 @@ export async function PUT(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = await requireAuthenticatedUser(request);
+    if (auth.error) return auth.error;
+
     const { id: routeId } = await context.params;
     const parsedId = parsePositiveIntRouteParam(routeId, 'Connection ID');
     if (parsedId.error) {
@@ -70,6 +81,13 @@ export async function PUT(
     let nextSsl = ssl !== undefined ? (ssl ? 1 : 0) : existing.ssl;
 
     if (nextType === 'sqlite') {
+      if (!supportsPersistentSqliteStorage()) {
+        return NextResponse.json(
+          { error: 'SQLite connections are not supported on Netlify deployments. Use Turso or PostgreSQL.' },
+          { status: 400 }
+        );
+      }
+
       if (sqliteFile && sqliteFile.size > 0) {
         const uploadedPath = await saveUploadedSqliteFile(sqliteFile);
         if (existing.type === 'sqlite' && existing.database !== uploadedPath) {
@@ -147,6 +165,9 @@ export async function DELETE(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = await requireAuthenticatedUser(request);
+    if (auth.error) return auth.error;
+
     const { id: routeId } = await context.params;
     const parsedId = parsePositiveIntRouteParam(routeId, 'Connection ID');
     if (parsedId.error) {

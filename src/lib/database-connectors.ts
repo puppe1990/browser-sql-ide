@@ -1,6 +1,5 @@
 import { Pool, PoolClient } from 'pg';
-import { createClient, type Client as TursoClient } from '@libsql/client';
-import Database from 'better-sqlite3';
+import { createClient, type Client as TursoClient } from '@libsql/client/web';
 import type { QueryResult, RowData } from '@/types';
 import { getErrorMessage } from '@/lib/utils';
 import {
@@ -14,6 +13,7 @@ import {
   resolveConnectionDatabasePath,
   sqliteFileExists,
 } from '@/lib/sqlite-files';
+import type BetterSqlite3 from 'better-sqlite3';
 
 export type DatabaseType = 'postgresql' | 'mysql' | 'sqlite' | 'mssql' | 'turso';
 
@@ -29,9 +29,28 @@ export interface DatabaseConnection {
   ssl?: boolean;
 }
 
+type SqliteDatabase = BetterSqlite3.Database;
+type SqliteConstructor = typeof BetterSqlite3;
+
+let sqliteConstructor: SqliteConstructor | null = null;
+
+function getSqliteConstructor(): SqliteConstructor {
+  if (sqliteConstructor) {
+    return sqliteConstructor;
+  }
+
+  try {
+    const runtimeRequire = eval('require') as NodeRequire;
+    sqliteConstructor = runtimeRequire('better-sqlite3') as SqliteConstructor;
+    return sqliteConstructor;
+  } catch {
+    throw new Error('SQLite connector is unavailable in this deployment. Use Turso or PostgreSQL.');
+  }
+}
+
 class DatabaseConnector {
   private pools: Map<number, Pool> = new Map();
-  private sqliteDatabases: Map<number, { db: Database.Database; databasePath: string }> = new Map();
+  private sqliteDatabases: Map<number, { db: SqliteDatabase; databasePath: string }> = new Map();
   private tursoClients: Map<number, { client: TursoClient; url: string; authToken: string }> = new Map();
 
   async connect(connection: DatabaseConnection): Promise<Pool> {
@@ -165,7 +184,7 @@ class DatabaseConnector {
     }
   }
 
-  private getSqliteDatabase(connection: DatabaseConnection): Database.Database {
+  private getSqliteDatabase(connection: DatabaseConnection): SqliteDatabase {
     if (!connection.database) {
       throw new Error('SQLite database file path is required');
     }
@@ -187,7 +206,8 @@ class DatabaseConnector {
       this.sqliteDatabases.delete(connection.id);
     }
 
-    const db = new Database(resolvedPath, {
+    const Sqlite = getSqliteConstructor();
+    const db = new Sqlite(resolvedPath, {
       readonly: false,
       fileMustExist: true,
     });

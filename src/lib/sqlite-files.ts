@@ -1,7 +1,15 @@
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 
-const SQLITE_UPLOAD_DIR = path.join(process.cwd(), 'data', 'sqlite');
+const RUNNING_ON_NETLIFY = Boolean(process.env.NETLIFY);
+const SQLITE_UPLOAD_DIR = RUNNING_ON_NETLIFY
+  ? path.join(os.tmpdir(), 'browser-sql-ide', 'sqlite')
+  : path.join(process.cwd(), 'data', 'sqlite');
+
+export function supportsPersistentSqliteStorage(): boolean {
+  return !RUNNING_ON_NETLIFY;
+}
 
 function ensureUploadDir() {
   if (!fs.existsSync(SQLITE_UPLOAD_DIR)) {
@@ -23,12 +31,15 @@ export async function saveUploadedSqliteFile(file: File): Promise<string> {
   const ext = getFileExtension(file.name);
   const uniqueName = `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`;
   const absolutePath = path.join(SQLITE_UPLOAD_DIR, uniqueName);
-  const relativePath = path.relative(process.cwd(), absolutePath);
   const buffer = Buffer.from(await file.arrayBuffer());
 
   fs.writeFileSync(absolutePath, buffer);
 
-  return relativePath;
+  if (RUNNING_ON_NETLIFY) {
+    return absolutePath;
+  }
+
+  return path.relative(process.cwd(), absolutePath);
 }
 
 export function resolveConnectionDatabasePath(databasePath: string): string {

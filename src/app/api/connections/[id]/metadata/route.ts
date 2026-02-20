@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { dbConnector } from '@/lib/database-connectors';
 import { parseMetadataCategoryParam, parseRequiredStringParam } from '@/lib/metadata-params';
+import { requireAuthenticatedUser } from '@/lib/require-auth';
 import { parsePositiveIntRouteParam } from '@/lib/route-params';
 import { hydrateConnectionRow, loadConnectionRowByIdAsync } from '@/lib/server/connections';
 import { getErrorMessage } from '@/lib/utils';
@@ -10,6 +11,9 @@ export async function GET(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = await requireAuthenticatedUser(request);
+    if (auth.error) return auth.error;
+
     const { id: routeId } = await context.params;
     const parsedId = parsePositiveIntRouteParam(routeId, 'Connection ID');
     if (parsedId.error) {

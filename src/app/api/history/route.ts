@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/lib/db';
 import { parseHistoryLimitParam } from '@/lib/history-params';
+import { requireAuthenticatedUser } from '@/lib/require-auth';
 import { parseOptionalPositiveIntParam } from '@/lib/route-params';
 import { getErrorMessage } from '@/lib/utils';
 
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireAuthenticatedUser(request);
+    if (auth.error) return auth.error;
+
     const { searchParams } = new URL(request.url);
     const connectionId = searchParams.get('connectionId');
     const limit = searchParams.get('limit');

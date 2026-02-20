@@ -3,6 +3,7 @@ import db from '@/lib/db';
 import { dbConnector } from '@/lib/database-connectors';
 import { parseConnectionAndQueryPayload } from '@/lib/query-request-params';
 import { parseJsonObjectBody } from '@/lib/request-body';
+import { requireAuthenticatedUser } from '@/lib/require-auth';
 import { loadDecryptedConnectionByIdAsync } from '@/lib/server/connections';
 import { getErrorMessage } from '@/lib/utils';
 
@@ -13,6 +14,9 @@ type ExecuteQueryPayload = {
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAuthenticatedUser(request);
+    if (auth.error) return auth.error;
+
     const parsedBody = await parseJsonObjectBody<ExecuteQueryPayload>(request);
     if (parsedBody.error) {
       return NextResponse.json({ error: parsedBody.error }, { status: parsedBody.status ?? 400 });

@@ -3,11 +3,15 @@ import db from '@/lib/db';
 import { readConnectionPayload, type ConnectionPayload } from '@/lib/connection-payload';
 import { encrypt } from '@/lib/encryption';
 import { parseOptionalPositivePort } from '@/lib/port-params';
+import { requireAuthenticatedUser } from '@/lib/require-auth';
 import { getErrorMessage } from '@/lib/utils';
-import { saveUploadedSqliteFile } from '@/lib/sqlite-files';
+import { saveUploadedSqliteFile, supportsPersistentSqliteStorage } from '@/lib/sqlite-files';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const auth = await requireAuthenticatedUser(request);
+    if (auth.error) return auth.error;
+
     const connections = await db
       .prepare('SELECT id, name, type, host, port, database, username, ssl, color, created_at, updated_at FROM connections ORDER BY created_at DESC')
       .all();
@@ -20,6 +24,9 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAuthenticatedUser(request);
+    if (auth.error) return auth.error;
+
     const parsedPayload = await readConnectionPayload(request);
     if (parsedPayload.error) {
       return NextResponse.json({ error: parsedPayload.error }, { status: parsedPayload.status ?? 400 });
@@ -47,6 +54,13 @@ export async function POST(request: NextRequest) {
     let nextSsl = ssl || false;
 
     if (normalizedType === 'sqlite') {
+      if (!supportsPersistentSqliteStorage()) {
+        return NextResponse.json(
+          { error: 'SQLite connections are not supported on Netlify deployments. Use Turso or PostgreSQL.' },
+          { status: 400 }
+        );
+      }
+
       if (!sqliteFile || sqliteFile.size === 0) {
         return NextResponse.json(
           { error: 'SQLite file is required' },

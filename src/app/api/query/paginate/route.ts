@@ -3,6 +3,7 @@ import { dbConnector } from '@/lib/database-connectors';
 import { parsePaginationLimit, parsePaginationOffset } from '@/lib/pagination-params';
 import { parseConnectionAndQueryPayload } from '@/lib/query-request-params';
 import { parseJsonObjectBody } from '@/lib/request-body';
+import { requireAuthenticatedUser } from '@/lib/require-auth';
 import { loadDecryptedConnectionByIdAsync } from '@/lib/server/connections';
 import { getErrorMessage } from '@/lib/utils';
 
@@ -15,6 +16,9 @@ type PaginateQueryPayload = {
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAuthenticatedUser(request);
+    if (auth.error) return auth.error;
+
     const parsedBody = await parseJsonObjectBody<PaginateQueryPayload>(request);
     if (parsedBody.error) {
       return NextResponse.json({ error: parsedBody.error }, { status: parsedBody.status ?? 400 });

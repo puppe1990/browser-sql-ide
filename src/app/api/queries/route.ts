@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import db from '@/lib/db';
 import { parseJsonObjectBody } from '@/lib/request-body';
+import { requireAuthenticatedUser } from '@/lib/require-auth';
 import { parseOptionalPositiveIntParam } from '@/lib/route-params';
 import { parseSavedQueryCreatePayload } from '@/lib/saved-query-payload';
 import { getErrorMessage } from '@/lib/utils';
 
 export async function GET(request: NextRequest) {
   try {
+    const auth = await requireAuthenticatedUser(request);
+    if (auth.error) return auth.error;
+
     const { searchParams } = new URL(request.url);
     const connectionId = searchParams.get('connectionId');
     const parsedConnectionId = parseOptionalPositiveIntParam(connectionId, 'Connection ID');
@@ -35,6 +39,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAuthenticatedUser(request);
+    if (auth.error) return auth.error;
+
     const parsedBody = await parseJsonObjectBody<Record<string, unknown>>(request);
     if (parsedBody.error) {
       return NextResponse.json({ error: parsedBody.error }, { status: parsedBody.status ?? 400 });

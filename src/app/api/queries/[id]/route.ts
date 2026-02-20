@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import db from '@/lib/db';
 import { parsePositiveIntRouteParam } from '@/lib/route-params';
 import { parseJsonObjectBody } from '@/lib/request-body';
+import { requireAuthenticatedUser } from '@/lib/require-auth';
 import { parseSavedQueryUpdatePayload } from '@/lib/saved-query-payload';
 import { getErrorMessage } from '@/lib/utils';
 
@@ -21,6 +22,9 @@ export async function GET(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = await requireAuthenticatedUser(request);
+    if (auth.error) return auth.error;
+
     const { id: routeId } = await context.params;
     const parsedId = parsePositiveIntRouteParam(routeId, 'Query ID');
     if (parsedId.error) {
@@ -46,6 +50,9 @@ export async function PUT(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = await requireAuthenticatedUser(request);
+    if (auth.error) return auth.error;
+
     const { id: routeId } = await context.params;
     const parsedId = parsePositiveIntRouteParam(routeId, 'Query ID');
     if (parsedId.error) {
@@ -95,6 +102,9 @@ export async function DELETE(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = await requireAuthenticatedUser(request);
+    if (auth.error) return auth.error;
+
     const { id: routeId } = await context.params;
     const parsedId = parsePositiveIntRouteParam(routeId, 'Query ID');
     if (parsedId.error) {

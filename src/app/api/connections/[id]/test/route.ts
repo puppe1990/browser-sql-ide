@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { dbConnector } from '@/lib/database-connectors';
 import { parsePositiveIntRouteParam } from '@/lib/route-params';
+import { requireAuthenticatedUser } from '@/lib/require-auth';
 import { loadDecryptedConnectionByIdAsync } from '@/lib/server/connections';
 import { getErrorMessage } from '@/lib/utils';
 
@@ -9,6 +10,9 @@ export async function POST(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = await requireAuthenticatedUser(request);
+    if (auth.error) return auth.error;
+
     const { id: routeId } = await context.params;
     const parsedId = parsePositiveIntRouteParam(routeId, 'Connection ID');
     if (parsedId.error) {
